@@ -833,7 +833,6 @@ dependencies = [
 name = "pokeplanner-service"
 version = "0.1.0"
 dependencies = [
- "async-trait",
  "chrono",
  "pokeplanner-core",
  "pokeplanner-storage",
@@ -847,7 +846,6 @@ dependencies = [
 name = "pokeplanner-storage"
 version = "0.1.0"
 dependencies = [
- "async-trait",
  "pokeplanner-core",
  "serde",
  "serde_json",

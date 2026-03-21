@@ -5,12 +5,12 @@ use pokeplanner_core::{AppError, HealthResponse, Job, JobId, JobResult, JobStatu
 use pokeplanner_storage::Storage;
 use tracing::info;
 
-pub struct PokePlannerService {
-    storage: Arc<dyn Storage>,
+pub struct PokePlannerService<S: Storage> {
+    storage: Arc<S>,
 }
 
-impl PokePlannerService {
-    pub fn new(storage: Arc<dyn Storage>) -> Self {
+impl<S: Storage> PokePlannerService<S> {
+    pub fn new(storage: Arc<S>) -> Self {
         Self { storage }
     }
 
@@ -49,7 +49,7 @@ impl PokePlannerService {
         self.storage.list_jobs().await
     }
 
-    async fn run_job(storage: Arc<dyn Storage>, job_id: JobId) {
+    async fn run_job(storage: Arc<S>, job_id: JobId) {
         // Mark as running
         if let Ok(mut job) = storage.get_job(&job_id).await {
             job.status = JobStatus::Running;
@@ -79,7 +79,7 @@ mod tests {
 
     use super::*;
 
-    async fn make_service() -> PokePlannerService {
+    async fn make_service() -> PokePlannerService<JsonFileStorage> {
         let dir = tempfile::tempdir().unwrap();
         let storage = Arc::new(JsonFileStorage::new(dir.keep()).await.unwrap());
         PokePlannerService::new(storage)

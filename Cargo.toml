@@ -53,6 +53,3 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # HTTP middleware
 tower = "0.5"
-
-# Async trait
-async-trait = "0.1"

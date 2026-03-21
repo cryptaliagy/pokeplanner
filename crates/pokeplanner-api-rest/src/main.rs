@@ -14,7 +14,7 @@ use serde_json::json;
 use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
 
-type AppState = Arc<PokePlannerService>;
+type AppState = Arc<PokePlannerService<JsonFileStorage>>;
 
 #[tokio::main]
 async fn main() {
