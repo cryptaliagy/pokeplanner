@@ -13,23 +13,19 @@ pokeplanner/
 │   │   └── src/
 │   │       ├── lib.rs
 │   │       ├── error.rs        # AppError enum
-│   │       ├── model.rs        # Pokemon, HealthResponse
-│   │       ├── job.rs          # Job, JobStatus, JobResult
-│   │       └── tests.rs
+│   │       ├── model.rs        # Pokemon, HealthResponse (+ inline tests)
+│   │       └── job.rs          # Job, JobStatus, JobResult (+ inline tests)
 │   ├── pokeplanner-storage/    # Storage trait + JSON file implementation
 │   │   └── src/
 │   │       ├── lib.rs
 │   │       ├── traits.rs       # Storage trait (async, Send+Sync)
-│   │       ├── json_store.rs   # JsonFileStorage implementation
-│   │       └── tests.rs
+│   │       └── json_store.rs   # JsonFileStorage implementation (+ inline tests)
 │   ├── pokeplanner-service/    # Core business logic
 │   │   └── src/
-│   │       ├── lib.rs          # PokePlannerService
-│   │       └── tests.rs
+│   │       └── lib.rs          # PokePlannerService (+ inline tests)
 │   ├── pokeplanner-api-rest/   # Axum REST API server
 │   │   └── src/
-│   │       ├── main.rs         # Server binary + route handlers
-│   │       └── tests.rs
+│   │       └── main.rs         # Server binary + route handlers (+ inline tests)
 │   ├── pokeplanner-api-grpc/   # Tonic gRPC API server
 │   │   └── src/
 │   │       ├── main.rs         # Server binary + gRPC handlers

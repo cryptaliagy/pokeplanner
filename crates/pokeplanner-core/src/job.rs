@@ -45,3 +45,31 @@ impl Default for Job {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_defaults_to_pending() {
+        let job = Job::new();
+        assert_eq!(job.status, JobStatus::Pending);
+        assert!(job.result.is_none());
+    }
+
+    #[test]
+    fn test_has_unique_ids() {
+        let a = Job::new();
+        let b = Job::new();
+        assert_ne!(a.id, b.id);
+    }
+
+    #[test]
+    fn test_serialization_roundtrip() {
+        let job = Job::new();
+        let json = serde_json::to_string(&job).unwrap();
+        let deserialized: Job = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.id, job.id);
+        assert_eq!(deserialized.status, job.status);
+    }
+}

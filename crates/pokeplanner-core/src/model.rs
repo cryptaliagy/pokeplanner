@@ -25,3 +25,14 @@ impl HealthResponse {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_health_response_ok() {
+        let h = HealthResponse::ok();
+        assert_eq!(h.status, "ok");
+    }
+}

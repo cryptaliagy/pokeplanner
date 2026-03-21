@@ -20,7 +20,13 @@
 4. **Triple helix: intent documents, tests, and functionality.**
    - All three must stay in sync. When changing code, update tests and docs together
    - Intent documents are a primary actor, not an afterthought
-   - Tests live alongside source in `src/tests.rs` within each crate
+
+5. **Follow idiomatic Rust testing conventions.**
+   - Unit tests go **inline** in the same file as the code they test, inside a `#[cfg(test)] mod tests { ... }` block at the bottom of the file
+   - Never create separate `src/tests.rs` files — this splits tests from the code they cover and is not idiomatic Rust
+   - Use `use super::*;` inside the test module to access the parent module's items
+   - Integration tests (cross-crate, end-to-end) go in a top-level `tests/` directory per crate
+   - Run all tests with `cargo test` from the workspace root
 
 ## Architecture Quick Reference
 
