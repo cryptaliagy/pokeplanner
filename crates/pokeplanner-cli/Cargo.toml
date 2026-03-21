@@ -1,0 +1,20 @@
+[package]
+name = "pokeplanner-cli"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "pokeplanner"
+path = "src/main.rs"
+
+[dependencies]
+pokeplanner-core = { workspace = true }
+pokeplanner-storage = { workspace = true }
+pokeplanner-service = { workspace = true }
+clap = { workspace = true }
+tokio = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { workspace = true }
+anyhow = { workspace = true }

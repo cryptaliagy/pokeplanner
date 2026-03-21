@@ -1,0 +1,24 @@
+[package]
+name = "pokeplanner-api-rest"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "pokeplanner-rest"
+path = "src/main.rs"
+
+[dependencies]
+pokeplanner-core = { workspace = true }
+pokeplanner-storage = { workspace = true }
+pokeplanner-service = { workspace = true }
+axum = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
+tower = { workspace = true, features = ["util"] }

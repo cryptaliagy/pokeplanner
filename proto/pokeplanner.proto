@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package pokeplanner;
+
+service PokePlannerService {
+  rpc Health (HealthRequest) returns (HealthResponse);
+  rpc Ping (PingRequest) returns (PingResponse);
+  rpc SubmitJob (SubmitJobRequest) returns (SubmitJobResponse);
+  rpc GetJob (GetJobRequest) returns (GetJobResponse);
+  rpc ListJobs (ListJobsRequest) returns (ListJobsResponse);
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  string status = 1;
+  string version = 2;
+}
+
+message PingRequest {
+  string message = 1;
+}
+
+message PingResponse {
+  string message = 1;
+}
+
+message SubmitJobRequest {}
+
+message SubmitJobResponse {
+  string job_id = 1;
+}
+
+message GetJobRequest {
+  string job_id = 1;
+}
+
+message GetJobResponse {
+  string id = 1;
+  string status = 2;
+  string created_at = 3;
+  string updated_at = 4;
+  optional string result_output = 5;
+}
+
+message ListJobsRequest {}
+
+message ListJobsResponse {
+  repeated GetJobResponse jobs = 1;
+}
