@@ -1,6 +1,5 @@
 use std::path::PathBuf;
 
-use async_trait::async_trait;
 use pokeplanner_core::{AppError, Job, JobId};
 use tokio::sync::RwLock;
 
@@ -27,7 +26,6 @@ impl JsonFileStorage {
     }
 }
 
-#[async_trait]
 impl Storage for JsonFileStorage {
     async fn save_job(&self, job: &Job) -> Result<(), AppError> {
         let _guard = self.lock.write().await;

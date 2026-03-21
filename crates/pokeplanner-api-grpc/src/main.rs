@@ -14,7 +14,7 @@ use proto::poke_planner_service_server::{PokePlannerServiceServer, PokePlannerSe
 use proto::*;
 
 pub struct GrpcHandler {
-    service: Arc<PokePlannerService>,
+    service: Arc<PokePlannerService<JsonFileStorage>>,
 }
 
 #[tonic::async_trait]

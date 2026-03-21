@@ -6,7 +6,6 @@ edition.workspace = true
 [dependencies]
 pokeplanner-core = { workspace = true }
 pokeplanner-storage = { workspace = true }
-async-trait = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }

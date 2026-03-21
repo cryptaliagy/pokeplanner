@@ -42,7 +42,9 @@
 
 The `Storage` trait (`crates/pokeplanner-storage/src/traits.rs`) provides:
 - `save_job`, `get_job`, `list_jobs`, `update_job`
+- Uses native async via `impl Future` return types (no `async-trait` dependency)
 - Currently implemented by `JsonFileStorage` (JSON files in `data/jobs/`)
+- `PokePlannerService<S: Storage>` is generic over the storage implementation — concrete type resolved at each binary's `main()`
 - Designed for future swap to SQL or NoSQL — only implement the trait
 
 ## Job Lifecycle

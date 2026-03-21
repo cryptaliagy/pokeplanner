@@ -17,8 +17,6 @@
 | **chrono** | 0.4 | Date/time handling | Full-featured datetime library with serde and timezone support |
 | **tracing** | 0.1 | Structured logging | Async-aware, structured, composable instrumentation |
 | **tracing-subscriber** | 0.3 | Log output | Configurable subscribers with env-filter for log levels |
-| **async-trait** | 0.1 | Async trait support | Enables async methods in traits (used for Storage trait) |
-
 ## Build Dependencies
 
 | Dependency | Version | Purpose |
@@ -31,3 +29,4 @@
 - **Tonic for gRPC**: Tonic is the only mature gRPC framework in Rust and integrates seamlessly with the tokio ecosystem.
 - **thiserror + anyhow**: `thiserror` for library crates (strongly typed errors), `anyhow` for the CLI binary (ergonomic error propagation).
 - **Trait-based storage**: The `Storage` trait in `pokeplanner-storage` is designed to be implementation-agnostic. JSON file storage is the current implementation, but the interface supports future migration to SQL (e.g., sqlx) or NoSQL (e.g., MongoDB) without changing the service layer.
+- **Native async traits over async-trait**: The `Storage` trait uses native `impl Future` return types (Rust 1.75+) with explicit `+ Send` bounds instead of the `async-trait` crate. Combined with generics on `PokePlannerService<S: Storage>`, this avoids heap-allocated boxed futures and eliminates the `async-trait` dependency.
