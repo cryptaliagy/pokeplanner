@@ -1,0 +1,22 @@
+[package]
+name = "pokeplanner-api-grpc"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "pokeplanner-grpc"
+path = "src/main.rs"
+
+[dependencies]
+pokeplanner-core = { workspace = true }
+pokeplanner-storage = { workspace = true }
+pokeplanner-service = { workspace = true }
+tonic = { workspace = true }
+prost = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { workspace = true }
+
+[build-dependencies]
+tonic-build = { workspace = true }
