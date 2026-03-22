@@ -253,16 +253,8 @@ async fn main() -> anyhow::Result<()> {
                     format!("({} total)", varieties.len()).dimmed(),
                 );
                 for v in &others {
-                    let types_display: Vec<String> =
-                        v.types.iter().map(|t| format!("{}", color_type(t))).collect();
-                    println!(
-                        "    {:<25} {}  BST: {}",
-                        v.form_name,
-                        types_display.join("/"),
-                        v.bst().to_string().bold(),
-                    );
+                    print_pokemon_detail(v);
                 }
-                println!();
             }
         }
         Commands::PlanTeam {
