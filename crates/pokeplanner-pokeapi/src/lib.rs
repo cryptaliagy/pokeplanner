@@ -3,7 +3,7 @@ pub mod client;
 pub mod traits;
 pub mod types;
 
-pub use client::PokeApiHttpClient;
+pub use client::{PokeApiClientConfig, PokeApiHttpClient};
 pub use traits::{PokeApiClient, TypeEffectivenessData, TypeEffectivenessEntry};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

@@ -14,9 +14,30 @@ use crate::VersionGroupInfo;
 
 const BASE_URL: &str = "https://pokeapi.co/api/v2";
 const CONCURRENT_REQUESTS: usize = 10;
+const DEFAULT_REQUESTS_PER_SECOND: u32 = 20;
+const DEFAULT_BURST_SIZE: u32 = 5;
 
 type DefaultRateLimiter =
     RateLimiter<governor::state::NotKeyed, governor::state::InMemoryState, governor::clock::DefaultClock>;
+
+/// Configuration for the PokeAPI HTTP client.
+pub struct PokeApiClientConfig {
+    pub cache_path: std::path::PathBuf,
+    /// Maximum sustained requests per second to PokeAPI. Default: 20.
+    pub requests_per_second: u32,
+    /// Maximum burst size (requests allowed above the sustained rate). Default: 5.
+    pub burst_size: u32,
+}
+
+impl PokeApiClientConfig {
+    pub fn new(cache_path: std::path::PathBuf) -> Self {
+        Self {
+            cache_path,
+            requests_per_second: DEFAULT_REQUESTS_PER_SECOND,
+            burst_size: DEFAULT_BURST_SIZE,
+        }
+    }
+}
 
 pub struct PokeApiHttpClient {
     http: reqwest::Client,
@@ -26,9 +47,16 @@ pub struct PokeApiHttpClient {
 
 impl PokeApiHttpClient {
     pub async fn new(cache_path: std::path::PathBuf) -> Result<Self, AppError> {
-        let cache = DiskCache::new(cache_path).await?;
-        let quota = Quota::per_second(NonZeroU32::new(100).unwrap())
-            .allow_burst(NonZeroU32::new(10).unwrap());
+        Self::with_config(PokeApiClientConfig::new(cache_path)).await
+    }
+
+    pub async fn with_config(config: PokeApiClientConfig) -> Result<Self, AppError> {
+        let cache = DiskCache::new(config.cache_path).await?;
+        let rps = NonZeroU32::new(config.requests_per_second)
+            .unwrap_or(NonZeroU32::new(DEFAULT_REQUESTS_PER_SECOND).unwrap());
+        let burst = NonZeroU32::new(config.burst_size)
+            .unwrap_or(NonZeroU32::new(DEFAULT_BURST_SIZE).unwrap());
+        let quota = Quota::per_second(rps).allow_burst(burst);
         let rate_limiter = Arc::new(RateLimiter::direct(quota));
 
         Ok(Self {

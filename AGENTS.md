@@ -55,8 +55,9 @@ The `PokeApiClient` trait (`crates/pokeplanner-pokeapi/src/traits.rs`) provides:
 - Uses native async via `impl Future` return types (same pattern as `Storage`)
 - Currently implemented by `PokeApiHttpClient` with:
   - Disk cache at `data/cache/` with 1-year TTL
-  - Rate limiting via `governor` (100 req/s, burst 10)
+  - Rate limiting via `governor` (default 20 req/s, burst 5 — configurable via `PokeApiClientConfig`)
   - Concurrent fetching via `BufferedUnordered` (10 concurrent requests)
+  - Single shared rate limiter across all concurrent jobs and API handlers
 - `PokePlannerService<S: Storage, P: PokeApiClient>` is generic over both — concrete types resolved at each binary's `main()`
 
 ## PokeAPI Navigation Chain
