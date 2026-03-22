@@ -12,7 +12,7 @@ use crate::traits::{PokeApiClient, TypeEffectivenessData, TypeEffectivenessEntry
 use crate::types::*;
 use crate::VersionGroupInfo;
 
-const BASE_URL: &str = "https://pokeapi.co/api/v2";
+const DEFAULT_BASE_URL: &str = "https://pokeapi.co/api/v2";
 const CONCURRENT_REQUESTS: usize = 10;
 const DEFAULT_REQUESTS_PER_SECOND: u32 = 20;
 const DEFAULT_BURST_SIZE: u32 = 5;
@@ -23,6 +23,8 @@ type DefaultRateLimiter =
 /// Configuration for the PokeAPI HTTP client.
 pub struct PokeApiClientConfig {
     pub cache_path: std::path::PathBuf,
+    /// Base URL for the PokeAPI. Default: "https://pokeapi.co/api/v2".
+    pub base_url: String,
     /// Maximum sustained requests per second to PokeAPI. Default: 20.
     pub requests_per_second: u32,
     /// Maximum burst size (requests allowed above the sustained rate). Default: 5.
@@ -33,6 +35,7 @@ impl PokeApiClientConfig {
     pub fn new(cache_path: std::path::PathBuf) -> Self {
         Self {
             cache_path,
+            base_url: DEFAULT_BASE_URL.to_string(),
             requests_per_second: DEFAULT_REQUESTS_PER_SECOND,
             burst_size: DEFAULT_BURST_SIZE,
         }
@@ -43,6 +46,7 @@ pub struct PokeApiHttpClient {
     http: reqwest::Client,
     cache: DiskCache,
     rate_limiter: Arc<DefaultRateLimiter>,
+    base_url: String,
 }
 
 impl PokeApiHttpClient {
@@ -63,6 +67,7 @@ impl PokeApiHttpClient {
             http: reqwest::Client::new(),
             cache,
             rate_limiter,
+            base_url: config.base_url,
         })
     }
 
@@ -170,7 +175,7 @@ impl PokeApiHttpClient {
         no_cache: bool,
         include_variants: bool,
     ) -> Result<Vec<Pokemon>, AppError> {
-        let species_url = format!("{BASE_URL}/pokemon-species/{species_name}");
+        let species_url = format!("{}/pokemon-species/{species_name}", self.base_url);
         let species: PokemonSpeciesResponse = self
             .fetch(&species_url, "species", species_name, no_cache)
             .await?;
@@ -184,7 +189,7 @@ impl PokeApiHttpClient {
         let mut pokemon_list = Vec::new();
         for variety in varieties {
             let pokemon_name = &variety.pokemon.name;
-            let pokemon_url = format!("{BASE_URL}/pokemon/{pokemon_name}");
+            let pokemon_url = format!("{}/pokemon/{pokemon_name}", self.base_url);
             match self
                 .fetch::<PokemonResponse>(&pokemon_url, "pokemon", pokemon_name, no_cache)
                 .await
@@ -205,7 +210,7 @@ impl PokeApiHttpClient {
 
 impl PokeApiClient for PokeApiHttpClient {
     async fn get_version_groups(&self, no_cache: bool) -> Result<Vec<VersionGroupInfo>, AppError> {
-        let url = format!("{BASE_URL}/version-group?limit=100");
+        let url = format!("{}/version-group?limit=100", self.base_url);
         let list: NamedApiResourceList = self
             .fetch(&url, "meta", "version-groups-list", no_cache)
             .await?;
@@ -214,7 +219,7 @@ impl PokeApiClient for PokeApiHttpClient {
         for resource in &list.results {
             let vg: VersionGroupResponse = self
                 .fetch(
-                    &format!("{BASE_URL}/version-group/{}", resource.name),
+                    &format!("{}/version-group/{}", self.base_url, resource.name),
                     "version-group",
                     &resource.name,
                     no_cache,
@@ -248,7 +253,7 @@ impl PokeApiClient for PokeApiHttpClient {
         }
 
         // Fetch version group -> pokedexes -> species -> pokemon
-        let vg_url = format!("{BASE_URL}/version-group/{version_group}");
+        let vg_url = format!("{}/version-group/{version_group}", self.base_url);
         let vg: VersionGroupResponse = self
             .fetch(&vg_url, "version-group", version_group, no_cache)
             .await?;
@@ -258,7 +263,7 @@ impl PokeApiClient for PokeApiHttpClient {
         let mut seen_species: HashSet<String> = HashSet::new();
 
         for pokedex_ref in &vg.pokedexes {
-            let pokedex_url = format!("{BASE_URL}/pokedex/{}", pokedex_ref.name);
+            let pokedex_url = format!("{}/pokedex/{}", self.base_url, pokedex_ref.name);
             let pokedex: PokedexResponse = self
                 .fetch(&pokedex_url, "pokedex", &pokedex_ref.name, no_cache)
                 .await?;
@@ -308,11 +313,11 @@ impl PokeApiClient for PokeApiHttpClient {
     }
 
     async fn get_pokemon(&self, name: &str, no_cache: bool) -> Result<Pokemon, AppError> {
-        let url = format!("{BASE_URL}/pokemon/{name}");
+        let url = format!("{}/pokemon/{name}", self.base_url);
         let resp: PokemonResponse = self.fetch(&url, "pokemon", name, no_cache).await?;
 
         // We need the species to get pokedex_number and is_default
-        let species_url = format!("{BASE_URL}/pokemon-species/{}", resp.species.name);
+        let species_url = format!("{}/pokemon-species/{}", self.base_url, resp.species.name);
         let species: PokemonSpeciesResponse = self
             .fetch(&species_url, "species", &resp.species.name, no_cache)
             .await?;
@@ -332,7 +337,7 @@ impl PokeApiClient for PokeApiHttpClient {
         species_name: &str,
         no_cache: bool,
     ) -> Result<Vec<Pokemon>, AppError> {
-        let species_url = format!("{BASE_URL}/pokemon-species/{species_name}");
+        let species_url = format!("{}/pokemon-species/{species_name}", self.base_url);
         let species: PokemonSpeciesResponse = self
             .fetch(&species_url, "species", species_name, no_cache)
             .await?;
@@ -356,7 +361,7 @@ impl PokeApiClient for PokeApiHttpClient {
             return Ok(cached);
         }
 
-        let pokedex_url = format!("{BASE_URL}/pokedex/{pokedex_name}");
+        let pokedex_url = format!("{}/pokedex/{pokedex_name}", self.base_url);
         let pokedex: PokedexResponse = self
             .fetch(&pokedex_url, "pokedex", pokedex_name, no_cache)
             .await?;
@@ -425,7 +430,7 @@ impl PokeApiClient for PokeApiHttpClient {
                 .and_then(|v| v.as_str().map(String::from))
                 .unwrap_or_default();
 
-            let url = format!("{BASE_URL}/type/{type_name}");
+            let url = format!("{}/type/{type_name}", self.base_url);
             let type_resp: TypeResponse = self
                 .fetch(&url, "type", &type_name, no_cache)
                 .await?;

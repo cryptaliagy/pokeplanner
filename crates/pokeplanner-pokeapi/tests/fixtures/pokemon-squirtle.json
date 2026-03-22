@@ -1,0 +1,16 @@
+{
+  "id": 7,
+  "name": "squirtle",
+  "stats": [
+    {"base_stat": 44, "effort": 0, "stat": {"name": "hp", "url": ""}},
+    {"base_stat": 48, "effort": 0, "stat": {"name": "attack", "url": ""}},
+    {"base_stat": 65, "effort": 1, "stat": {"name": "defense", "url": ""}},
+    {"base_stat": 50, "effort": 0, "stat": {"name": "special-attack", "url": ""}},
+    {"base_stat": 64, "effort": 0, "stat": {"name": "special-defense", "url": ""}},
+    {"base_stat": 43, "effort": 0, "stat": {"name": "speed", "url": ""}}
+  ],
+  "types": [
+    {"slot": 1, "type": {"name": "water", "url": ""}}
+  ],
+  "species": {"name": "squirtle", "url": ""}
+}

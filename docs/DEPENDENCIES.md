@@ -22,6 +22,14 @@
 | **futures** | 0.3 | Async utilities | `stream::BufferedUnordered` for concurrent pokemon fetching with bounded concurrency |
 | **tower** | 0.5 | HTTP middleware | Shared middleware ecosystem between axum and tonic |
 
+## Test Dependencies
+
+| Dependency | Version | Purpose | Why Chosen |
+|---|---|---|---|
+| **wiremock** | 0.6 | HTTP server mocking | Async-native mock server for testing `PokeApiHttpClient` against fake PokeAPI responses; spins up real TCP listener on random port |
+| **http-body-util** | 0.1 | Response body extraction | Used in REST API integration tests to collect and deserialize axum response bodies |
+| **tempfile** | 3.x | Temporary directories | Isolated storage directories for each test run; auto-cleaned on drop |
+
 ## Build Dependencies
 
 | Dependency | Version | Purpose |

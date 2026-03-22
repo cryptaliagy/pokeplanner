@@ -1,0 +1,12 @@
+{
+  "id": 9,
+  "name": "steel",
+  "damage_relations": {
+    "double_damage_from": [{"name": "fire", "url": ""}, {"name": "fighting", "url": ""}, {"name": "ground", "url": ""}],
+    "double_damage_to": [{"name": "ice", "url": ""}, {"name": "rock", "url": ""}, {"name": "fairy", "url": ""}],
+    "half_damage_from": [{"name": "normal", "url": ""}, {"name": "grass", "url": ""}, {"name": "ice", "url": ""}, {"name": "flying", "url": ""}, {"name": "psychic", "url": ""}, {"name": "bug", "url": ""}, {"name": "rock", "url": ""}, {"name": "dragon", "url": ""}, {"name": "steel", "url": ""}, {"name": "fairy", "url": ""}],
+    "half_damage_to": [{"name": "fire", "url": ""}, {"name": "water", "url": ""}, {"name": "electric", "url": ""}, {"name": "steel", "url": ""}],
+    "no_damage_from": [{"name": "poison", "url": ""}],
+    "no_damage_to": []
+  }
+}

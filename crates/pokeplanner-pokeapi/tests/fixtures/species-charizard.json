@@ -1,0 +1,8 @@
+{
+  "id": 6,
+  "name": "charizard",
+  "varieties": [
+    {"is_default": true, "pokemon": {"name": "charizard", "url": ""}},
+    {"is_default": false, "pokemon": {"name": "charizard-mega-x", "url": ""}}
+  ]
+}

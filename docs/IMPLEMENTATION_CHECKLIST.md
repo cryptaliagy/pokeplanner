@@ -28,5 +28,6 @@
 
 ## Future Work
 - [x] gRPC proto messages for new RPCs (PlanTeam, GetGamePokemon, etc.)
-- [ ] Integration tests with mocked HTTP responses
+- [x] Integration tests with mocked HTTP responses
+- [ ] gRPC integration tests (make GrpcHandler generic, tonic in-process transport)
 - [ ] Stale job recovery on startup (Running → Failed for interrupted jobs)

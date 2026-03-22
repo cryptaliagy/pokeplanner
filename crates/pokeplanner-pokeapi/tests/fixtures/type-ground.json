@@ -1,0 +1,12 @@
+{
+  "id": 5,
+  "name": "ground",
+  "damage_relations": {
+    "double_damage_from": [{"name": "water", "url": ""}, {"name": "grass", "url": ""}, {"name": "ice", "url": ""}],
+    "double_damage_to": [{"name": "fire", "url": ""}, {"name": "electric", "url": ""}, {"name": "poison", "url": ""}, {"name": "rock", "url": ""}, {"name": "steel", "url": ""}],
+    "half_damage_from": [{"name": "poison", "url": ""}, {"name": "rock", "url": ""}],
+    "half_damage_to": [{"name": "grass", "url": ""}, {"name": "bug", "url": ""}],
+    "no_damage_from": [{"name": "electric", "url": ""}],
+    "no_damage_to": [{"name": "flying", "url": ""}]
+  }
+}
