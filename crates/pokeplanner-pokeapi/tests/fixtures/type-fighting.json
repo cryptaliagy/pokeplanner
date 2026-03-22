@@ -1,0 +1,12 @@
+{
+  "id": 2,
+  "name": "fighting",
+  "damage_relations": {
+    "double_damage_from": [{"name": "flying", "url": ""}, {"name": "psychic", "url": ""}, {"name": "fairy", "url": ""}],
+    "double_damage_to": [{"name": "normal", "url": ""}, {"name": "ice", "url": ""}, {"name": "rock", "url": ""}, {"name": "dark", "url": ""}, {"name": "steel", "url": ""}],
+    "half_damage_from": [{"name": "bug", "url": ""}, {"name": "rock", "url": ""}, {"name": "dark", "url": ""}],
+    "half_damage_to": [{"name": "poison", "url": ""}, {"name": "flying", "url": ""}, {"name": "psychic", "url": ""}, {"name": "bug", "url": ""}, {"name": "fairy", "url": ""}],
+    "no_damage_from": [],
+    "no_damage_to": [{"name": "ghost", "url": ""}]
+  }
+}

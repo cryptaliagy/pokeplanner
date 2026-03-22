@@ -22,20 +22,26 @@ pokeplanner/
 │   │       ├── traits.rs       # Storage trait (async, Send+Sync)
 │   │       └── json_store.rs   # JsonFileStorage implementation (+ inline tests)
 │   ├── pokeplanner-pokeapi/    # PokeAPI v2 client with caching and rate limiting
-│   │   └── src/
-│   │       ├── lib.rs          # Re-exports, VersionGroupInfo
-│   │       ├── types.rs        # PokeAPI response deserialization types (+ inline tests)
-│   │       ├── cache.rs        # DiskCache with 1-year TTL (+ inline tests)
-│   │       ├── client.rs       # PokeApiHttpClient (HTTP + cache + rate limit)
-│   │       └── traits.rs       # PokeApiClient trait, TypeEffectivenessData
+│   │   ├── src/
+│   │   │   ├── lib.rs          # Re-exports, VersionGroupInfo
+│   │   │   ├── types.rs        # PokeAPI response deserialization types (+ inline tests)
+│   │   │   ├── cache.rs        # DiskCache with 1-year TTL (+ inline tests)
+│   │   │   ├── client.rs       # PokeApiHttpClient (HTTP + cache + rate limit, configurable base_url)
+│   │   │   └── traits.rs       # PokeApiClient trait, TypeEffectivenessData
+│   │   └── tests/
+│   │       ├── http_client_integration.rs  # wiremock-based integration tests
+│   │       └── fixtures/       # JSON fixture files (PokeAPI response shapes)
 │   ├── pokeplanner-service/    # Core business logic
 │   │   └── src/
 │   │       ├── lib.rs          # PokePlannerService<S, P> (+ inline tests)
 │   │       ├── type_chart.rs   # TypeChart: 18x18 effectiveness matrix (+ inline tests)
 │   │       └── team_planner.rs # TeamPlanner: hybrid exact/beam search (+ inline tests)
 │   ├── pokeplanner-api-rest/   # Axum REST API server
-│   │   └── src/
-│   │       └── main.rs         # Server binary + route handlers (+ inline tests)
+│   │   ├── src/
+│   │   │   ├── lib.rs          # Router factory + route handlers (+ inline tests)
+│   │   │   └── main.rs         # Server binary entry point
+│   │   └── tests/
+│   │       └── rest_api_integration.rs  # Integration tests with mock PokeAPI
 │   ├── pokeplanner-api-grpc/   # Tonic gRPC API server
 │   │   └── src/
 │   │       ├── main.rs         # Server binary + gRPC handlers

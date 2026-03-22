@@ -1,0 +1,12 @@
+{
+  "id": 1,
+  "name": "normal",
+  "damage_relations": {
+    "double_damage_from": [{"name": "fighting", "url": ""}],
+    "double_damage_to": [],
+    "half_damage_from": [],
+    "half_damage_to": [{"name": "rock", "url": ""}, {"name": "steel", "url": ""}],
+    "no_damage_from": [{"name": "ghost", "url": ""}],
+    "no_damage_to": [{"name": "ghost", "url": ""}]
+  }
+}

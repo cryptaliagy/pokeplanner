@@ -1,0 +1,9 @@
+{
+  "id": 2,
+  "name": "kanto",
+  "pokemon_entries": [
+    {"entry_number": 1, "pokemon_species": {"name": "bulbasaur", "url": ""}},
+    {"entry_number": 4, "pokemon_species": {"name": "charmander", "url": ""}},
+    {"entry_number": 7, "pokemon_species": {"name": "squirtle", "url": ""}}
+  ]
+}

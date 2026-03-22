@@ -1,0 +1,17 @@
+{
+  "id": 10034,
+  "name": "charizard-mega-x",
+  "stats": [
+    {"base_stat": 78, "effort": 0, "stat": {"name": "hp", "url": ""}},
+    {"base_stat": 130, "effort": 0, "stat": {"name": "attack", "url": ""}},
+    {"base_stat": 111, "effort": 0, "stat": {"name": "defense", "url": ""}},
+    {"base_stat": 130, "effort": 0, "stat": {"name": "special-attack", "url": ""}},
+    {"base_stat": 85, "effort": 0, "stat": {"name": "special-defense", "url": ""}},
+    {"base_stat": 100, "effort": 0, "stat": {"name": "speed", "url": ""}}
+  ],
+  "types": [
+    {"slot": 1, "type": {"name": "fire", "url": ""}},
+    {"slot": 2, "type": {"name": "dragon", "url": ""}}
+  ],
+  "species": {"name": "charizard", "url": ""}
+}

@@ -1,0 +1,12 @@
+{
+  "id": 10,
+  "name": "fire",
+  "damage_relations": {
+    "double_damage_from": [{"name": "water", "url": ""}, {"name": "ground", "url": ""}, {"name": "rock", "url": ""}],
+    "double_damage_to": [{"name": "grass", "url": ""}, {"name": "ice", "url": ""}, {"name": "bug", "url": ""}, {"name": "steel", "url": ""}],
+    "half_damage_from": [{"name": "fire", "url": ""}, {"name": "grass", "url": ""}, {"name": "ice", "url": ""}, {"name": "bug", "url": ""}, {"name": "steel", "url": ""}, {"name": "fairy", "url": ""}],
+    "half_damage_to": [{"name": "fire", "url": ""}, {"name": "water", "url": ""}, {"name": "rock", "url": ""}, {"name": "dragon", "url": ""}],
+    "no_damage_from": [],
+    "no_damage_to": []
+  }
+}

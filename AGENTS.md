@@ -54,6 +54,7 @@ The `PokeApiClient` trait (`crates/pokeplanner-pokeapi/src/traits.rs`) provides:
 - `get_version_groups`, `get_game_pokemon`, `get_pokemon`, `get_species_varieties`, `get_type_chart`
 - Uses native async via `impl Future` return types (same pattern as `Storage`)
 - Currently implemented by `PokeApiHttpClient` with:
+  - Configurable `base_url` via `PokeApiClientConfig` (defaults to `https://pokeapi.co/api/v2`, overridden in tests to point at `wiremock` mock server)
   - Disk cache at `data/cache/` with 1-year TTL
   - Rate limiting via `governor` (default 20 req/s, burst 5 — configurable via `PokeApiClientConfig`)
   - Concurrent fetching via `BufferedUnordered` (10 concurrent requests)
@@ -136,6 +137,18 @@ Jobs are submitted, assigned a UUID, and processed asynchronously via `tokio::sp
 | `pokemon <name>` | Get pokemon details |
 | `plan-team` | Plan optimal team (`--game` or `--pokemon`, `--min-bst`, `--top-k`, `--wait`) |
 | `analyze-team <names>` | Analyze type coverage |
+
+## Testing
+
+Integration tests use two strategies:
+- **HTTP-level mocking** (`pokeplanner-pokeapi`): `wiremock` spins up a mock HTTP server; `PokeApiHttpClient` is configured with `base_url` pointing at it. Tests exercise the full HTTP→cache→parse pipeline. Fixtures live in `crates/pokeplanner-pokeapi/tests/fixtures/`.
+- **Trait-level mocking** (`pokeplanner-api-rest`): `create_router` is generic over `Storage` and `PokeApiClient`, so integration tests pass in a `MockPokeApi` struct and drive the router via `tower::ServiceExt::oneshot`.
+
+```bash
+cargo test                                                       # All tests
+cargo test -p pokeplanner-pokeapi --test http_client_integration  # HTTP client integration tests
+cargo test -p pokeplanner-api-rest --test rest_api_integration    # REST API integration tests
+```
 
 ## Build & Run
 

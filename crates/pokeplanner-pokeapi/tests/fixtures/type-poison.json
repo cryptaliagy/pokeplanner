@@ -1,0 +1,12 @@
+{
+  "id": 4,
+  "name": "poison",
+  "damage_relations": {
+    "double_damage_from": [{"name": "ground", "url": ""}, {"name": "psychic", "url": ""}],
+    "double_damage_to": [{"name": "grass", "url": ""}, {"name": "fairy", "url": ""}],
+    "half_damage_from": [{"name": "grass", "url": ""}, {"name": "fighting", "url": ""}, {"name": "poison", "url": ""}, {"name": "bug", "url": ""}, {"name": "fairy", "url": ""}],
+    "half_damage_to": [{"name": "poison", "url": ""}, {"name": "ground", "url": ""}, {"name": "rock", "url": ""}, {"name": "ghost", "url": ""}],
+    "no_damage_from": [],
+    "no_damage_to": [{"name": "steel", "url": ""}]
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "id": 6,
+  "name": "charizard",
+  "stats": [
+    {"base_stat": 78, "effort": 0, "stat": {"name": "hp", "url": ""}},
+    {"base_stat": 84, "effort": 0, "stat": {"name": "attack", "url": ""}},
+    {"base_stat": 78, "effort": 0, "stat": {"name": "defense", "url": ""}},
+    {"base_stat": 109, "effort": 3, "stat": {"name": "special-attack", "url": ""}},
+    {"base_stat": 85, "effort": 0, "stat": {"name": "special-defense", "url": ""}},
+    {"base_stat": 100, "effort": 0, "stat": {"name": "speed", "url": ""}}
+  ],
+  "types": [
+    {"slot": 1, "type": {"name": "fire", "url": ""}},
+    {"slot": 2, "type": {"name": "flying", "url": ""}}
+  ],
+  "species": {"name": "charizard", "url": ""}
+}

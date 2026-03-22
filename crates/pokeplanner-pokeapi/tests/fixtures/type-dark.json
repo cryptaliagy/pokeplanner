@@ -1,0 +1,12 @@
+{
+  "id": 17,
+  "name": "dark",
+  "damage_relations": {
+    "double_damage_from": [{"name": "fighting", "url": ""}, {"name": "bug", "url": ""}, {"name": "fairy", "url": ""}],
+    "double_damage_to": [{"name": "psychic", "url": ""}, {"name": "ghost", "url": ""}],
+    "half_damage_from": [{"name": "ghost", "url": ""}, {"name": "dark", "url": ""}],
+    "half_damage_to": [{"name": "fighting", "url": ""}, {"name": "dark", "url": ""}, {"name": "fairy", "url": ""}],
+    "no_damage_from": [{"name": "psychic", "url": ""}],
+    "no_damage_to": []
+  }
+}

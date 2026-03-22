@@ -1,0 +1,16 @@
+{
+  "id": 4,
+  "name": "charmander",
+  "stats": [
+    {"base_stat": 39, "effort": 0, "stat": {"name": "hp", "url": ""}},
+    {"base_stat": 52, "effort": 0, "stat": {"name": "attack", "url": ""}},
+    {"base_stat": 43, "effort": 0, "stat": {"name": "defense", "url": ""}},
+    {"base_stat": 60, "effort": 0, "stat": {"name": "special-attack", "url": ""}},
+    {"base_stat": 50, "effort": 0, "stat": {"name": "special-defense", "url": ""}},
+    {"base_stat": 65, "effort": 1, "stat": {"name": "speed", "url": ""}}
+  ],
+  "types": [
+    {"slot": 1, "type": {"name": "fire", "url": ""}}
+  ],
+  "species": {"name": "charmander", "url": ""}
+}

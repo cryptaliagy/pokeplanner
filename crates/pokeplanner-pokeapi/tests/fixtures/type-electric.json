@@ -1,0 +1,12 @@
+{
+  "id": 13,
+  "name": "electric",
+  "damage_relations": {
+    "double_damage_from": [{"name": "ground", "url": ""}],
+    "double_damage_to": [{"name": "water", "url": ""}, {"name": "flying", "url": ""}],
+    "half_damage_from": [{"name": "electric", "url": ""}, {"name": "flying", "url": ""}, {"name": "steel", "url": ""}],
+    "half_damage_to": [{"name": "electric", "url": ""}, {"name": "grass", "url": ""}, {"name": "dragon", "url": ""}],
+    "no_damage_from": [],
+    "no_damage_to": [{"name": "ground", "url": ""}]
+  }
+}

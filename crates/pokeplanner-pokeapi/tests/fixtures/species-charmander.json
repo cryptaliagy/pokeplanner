@@ -1,0 +1,7 @@
+{
+  "id": 4,
+  "name": "charmander",
+  "varieties": [
+    {"is_default": true, "pokemon": {"name": "charmander", "url": ""}}
+  ]
+}

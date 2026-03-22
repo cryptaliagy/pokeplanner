@@ -1,0 +1,9 @@
+{
+  "id": 1,
+  "name": "red-blue",
+  "pokedexes": [{"name": "kanto", "url": "https://pokeapi.co/api/v2/pokedex/2/"}],
+  "versions": [
+    {"name": "red", "url": "https://pokeapi.co/api/v2/version/1/"},
+    {"name": "blue", "url": "https://pokeapi.co/api/v2/version/2/"}
+  ]
+}

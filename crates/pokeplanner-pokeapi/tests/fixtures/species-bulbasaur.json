@@ -1,0 +1,7 @@
+{
+  "id": 1,
+  "name": "bulbasaur",
+  "varieties": [
+    {"is_default": true, "pokemon": {"name": "bulbasaur", "url": ""}}
+  ]
+}
