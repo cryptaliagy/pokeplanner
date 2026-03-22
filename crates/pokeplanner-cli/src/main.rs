@@ -10,7 +10,6 @@ use pokeplanner_pokeapi::PokeApiHttpClient;
 use pokeplanner_service::PokePlannerService;
 use pokeplanner_storage::JsonFileStorage;
 use tracing_subscriber::EnvFilter;
-use uuid::Uuid;
 
 fn default_data_dir() -> PathBuf {
     dirs::home_dir()
@@ -19,7 +18,7 @@ fn default_data_dir() -> PathBuf {
 }
 
 #[derive(Parser)]
-#[command(name = "pokeplanner", about = "PokePlanner CLI", version)]
+#[command(name = "pokeplanner", about = "PokePlanner CLI — build optimal Pokemon teams", version)]
 struct Cli {
     /// Directory for cached PokeAPI data
     #[arg(long, global = true, default_value_os_t = default_data_dir().join("cache"))]
@@ -35,19 +34,6 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Say hello
-    Hello,
-    /// Check service health
-    Health,
-    /// Submit a new job
-    SubmitJob,
-    /// Get job status by ID
-    GetJob {
-        /// Job ID (UUID)
-        id: String,
-    },
-    /// List all jobs
-    ListJobs,
     /// List available games (version groups)
     ListGames {
         #[arg(long)]
@@ -118,9 +104,6 @@ enum Commands {
         /// Enemy pokemon to counter (comma-separated). Optimizes team against this specific team.
         #[arg(long, value_delimiter = ',')]
         counter: Option<Vec<String>>,
-        /// Wait for the job to complete and print results
-        #[arg(long)]
-        wait: bool,
     },
     /// Analyze type coverage for a team
     AnalyzeTeam {
@@ -189,34 +172,14 @@ async fn main() -> anyhow::Result<()> {
     let service = PokePlannerService::new(storage, pokeapi);
 
     match cli.command {
-        Commands::Hello => {
-            println!("Hello from PokePlanner!");
-        }
-        Commands::Health => {
-            let health = service.health();
-            println!("{}", serde_json::to_string_pretty(&health)?);
-        }
-        Commands::SubmitJob => {
-            let job_id = service.submit_job().await?;
-            println!("Job submitted: {job_id}");
-        }
-        Commands::GetJob { id } => {
-            let job_id = Uuid::parse_str(&id)?;
-            let job = service.get_job(&job_id).await?;
-            println!("{}", serde_json::to_string_pretty(&job)?);
-        }
-        Commands::ListJobs => {
-            let jobs = service.list_jobs().await?;
-            println!("{}", serde_json::to_string_pretty(&jobs)?);
-        }
         Commands::ListGames { no_cache } => {
             let groups = service.list_version_groups(no_cache).await?;
+            println!("{}", format!("{} games available:", groups.len()).bold());
             for group in &groups {
                 println!(
-                    "{} (versions: {}, pokedexes: {})",
-                    group.name,
-                    group.versions.join(", "),
-                    group.pokedexes.join(", ")
+                    "  {:<25} {}",
+                    group.name.bold(),
+                    group.versions.join(", ").dimmed(),
                 );
             }
         }
@@ -270,7 +233,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Pokemon { name, no_cache } => {
             let pokemon = service.get_pokemon(&name, no_cache).await?;
-            println!("{}", serde_json::to_string_pretty(&pokemon)?);
+            print_pokemon_detail(&pokemon);
         }
         Commands::PlanTeam {
             game,
@@ -281,7 +244,6 @@ async fn main() -> anyhow::Result<()> {
             no_cache,
             include_variants,
             counter,
-            wait,
         } => {
             let source = if let Some(games) = game {
                 TeamSource::Game {
@@ -307,44 +269,39 @@ async fn main() -> anyhow::Result<()> {
             };
 
             let job_id = service.submit_team_plan(request).await?;
-            println!("Team plan job submitted: {job_id}");
 
-            if wait {
-                println!("Waiting for results...");
-                loop {
-                    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-                    let job = service.get_job(&job_id).await?;
+            loop {
+                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                let job = service.get_job(&job_id).await?;
 
-                    if let Some(progress) = &job.progress {
-                        eprint!(
-                            "\r  {} ({}/{})",
-                            progress.phase, progress.completed_steps, progress.total_steps
-                        );
-                    }
+                if let Some(progress) = &job.progress {
+                    eprint!(
+                        "\r  {} ({}/{})",
+                        progress.phase, progress.completed_steps, progress.total_steps
+                    );
+                }
 
-                    match job.status {
-                        pokeplanner_core::JobStatus::Completed => {
-                            eprintln!();
-                            if let Some(result) = &job.result {
-                                println!("{}", result.message);
-                                if let Some(data) = &result.data {
-                                    let plans: Vec<pokeplanner_core::TeamPlan> =
-                                        serde_json::from_value(data.clone())
-                                            .unwrap_or_default();
-                                    print_team_plans(&plans);
-                                }
+                match job.status {
+                    pokeplanner_core::JobStatus::Completed => {
+                        eprintln!();
+                        if let Some(result) = &job.result {
+                            println!("{}", result.message.dimmed());
+                            if let Some(data) = &result.data {
+                                let plans: Vec<pokeplanner_core::TeamPlan> =
+                                    serde_json::from_value(data.clone()).unwrap_or_default();
+                                print_team_plans(&plans);
                             }
-                            break;
                         }
-                        pokeplanner_core::JobStatus::Failed => {
-                            eprintln!();
-                            if let Some(result) = &job.result {
-                                eprintln!("Job failed: {}", result.message);
-                            }
-                            break;
-                        }
-                        _ => continue,
+                        break;
                     }
+                    pokeplanner_core::JobStatus::Failed => {
+                        eprintln!();
+                        if let Some(result) = &job.result {
+                            eprintln!("{} {}", "Error:".red().bold(), result.message);
+                        }
+                        break;
+                    }
+                    _ => continue,
                 }
             }
         }
@@ -357,21 +314,9 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn print_pokemon_list(pokemon: &[pokeplanner_core::Pokemon]) {
-    println!("{} pokemon found:", pokemon.len());
-    for p in pokemon {
-        let types_str: Vec<String> = p.types.iter().map(|t| format!("{t}")).collect();
-        let variant_marker = if !p.is_default_form { " *" } else { "" };
-        println!(
-            "  #{:>4} {:<25} [{:<20}] BST: {}{}",
-            p.pokedex_number,
-            p.form_name,
-            types_str.join("/"),
-            p.bst(),
-            variant_marker,
-        );
-    }
-}
+// ---------------------------------------------------------------------------
+// Display helpers
+// ---------------------------------------------------------------------------
 
 fn color_type(t: &PokemonType) -> colored::ColoredString {
     let name = format!("{t}");
@@ -403,6 +348,100 @@ fn colored_type_list(types: &[PokemonType]) -> String {
         .map(|t| format!("{}", color_type(t)))
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+/// Render a stat bar: filled portion + dimmed remainder, fixed width.
+fn stat_bar(value: u32, max: u32, width: usize) -> String {
+    let filled = ((value as f64 / max as f64) * width as f64).round() as usize;
+    let filled = filled.min(width);
+    let empty = width - filled;
+
+    let bar_color = if value >= 130 {
+        "green"
+    } else if value >= 80 {
+        "yellow"
+    } else {
+        "red"
+    };
+
+    let filled_str = "█".repeat(filled);
+    let empty_str = "░".repeat(empty);
+
+    let colored_filled = match bar_color {
+        "green" => filled_str.green(),
+        "yellow" => filled_str.yellow(),
+        _ => filled_str.red(),
+    };
+
+    format!("{colored_filled}{}", empty_str.dimmed())
+}
+
+fn print_pokemon_list(pokemon: &[pokeplanner_core::Pokemon]) {
+    println!("{}", format!("{} pokemon found:", pokemon.len()).bold());
+    println!();
+    for p in pokemon {
+        let types_display: Vec<String> =
+            p.types.iter().map(|t| format!("{}", color_type(t))).collect();
+        let variant_marker = if !p.is_default_form {
+            " *".dimmed().to_string()
+        } else {
+            String::new()
+        };
+        println!(
+            "  #{:>4} {:<25} {:<20} BST: {}{}",
+            p.pokedex_number.to_string().dimmed(),
+            p.form_name,
+            types_display.join("/"),
+            p.bst().to_string().bold(),
+            variant_marker,
+        );
+    }
+}
+
+fn print_pokemon_detail(p: &pokeplanner_core::Pokemon) {
+    let types_display: Vec<String> =
+        p.types.iter().map(|t| format!("{}", color_type(t))).collect();
+    let variant = if !p.is_default_form {
+        " (variant)".dimmed().to_string()
+    } else {
+        String::new()
+    };
+
+    println!();
+    println!("  {} {}", p.form_name.bold(), variant);
+    println!(
+        "  #{} {}",
+        p.pokedex_number,
+        types_display.join(" / ")
+    );
+    println!();
+
+    // Stats with bars (max single stat is 255 for bar scaling)
+    let max = 255;
+    let bar_w = 20;
+    let stats = [
+        ("HP ", p.stats.hp),
+        ("Atk", p.stats.attack),
+        ("Def", p.stats.defense),
+        ("SpA", p.stats.special_attack),
+        ("SpD", p.stats.special_defense),
+        ("Spe", p.stats.speed),
+    ];
+
+    for (label, val) in &stats {
+        println!(
+            "  {} {:>3}  {}",
+            label.dimmed(),
+            val.to_string().bold(),
+            stat_bar(*val, max, bar_w),
+        );
+    }
+    println!(
+        "  {} {}",
+        "BST".dimmed(),
+        p.bst().to_string().bold(),
+    );
+    println!();
 }
 
 fn print_team_plans(plans: &[pokeplanner_core::TeamPlan]) {
@@ -494,11 +533,19 @@ fn print_team_plans(plans: &[pokeplanner_core::TeamPlan]) {
         );
 
         if !cov.offensive_coverage.is_empty() {
-            println!("    {} {}", "SE against:".dimmed(), colored_type_list(&cov.offensive_coverage));
+            println!(
+                "    {} {}",
+                "SE against:".dimmed(),
+                colored_type_list(&cov.offensive_coverage)
+            );
         }
 
         if !cov.uncovered_types.is_empty() {
-            println!("    {} {}", "No SE into:".dimmed(), colored_type_list(&cov.uncovered_types));
+            println!(
+                "    {} {}",
+                "No SE into:".dimmed(),
+                colored_type_list(&cov.uncovered_types)
+            );
         }
 
         if !cov.defensive_weaknesses.is_empty() {
