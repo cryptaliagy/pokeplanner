@@ -150,10 +150,21 @@ docker run \
   my-agent-image
 ```
 
-**Caveat**: There is a [known Nix bug (NixOS/nix#6835)](https://github.com/NixOS/nix/issues/6835) where read-only mounts cause Nix to fall back to fetching from cache.nixos.org. Workarounds:
+**Caveats**:
+
+- **Read-only substituter bug** ([NixOS/nix#6835](https://github.com/NixOS/nix/issues/6835)): When Nix inside the container tries to use a read-only mounted store as a local substituter, it attempts to remount the store as writable, fails with "Operation not permitted," and falls back to fetching from cache.nixos.org.
+- **runc 1.2+ regression** ([opencontainers/runc#4575](https://github.com/opencontainers/runc/issues/4575)): `MS_REMOUNT` on bind mounts can cause read-only volume mounts to fail on recent container runtimes.
+- **User namespaces**: In rootless Docker/Podman, UID mapping can prevent access to store paths owned by root. Use `--userns=keep-id` (Podman) or ensure the container user has read access.
+
+Workarounds:
 
 - Mount read-**write** for ephemeral containers (they're throwaway anyway)
-- Use a chroot store: `nix-build --store=/tmp/store`
+- Mount at an alternate path (e.g., `/host-nix-store`) and use as `--substituters file:///host-nix-store` rather than as the primary store
+- Use an **overlayfs** with `/nix/store` as the read-only lower layer and a writable upper layer for new builds:
+  ```bash
+  mount -t overlay overlay \
+    -o lowerdir=/host-nix-store,upperdir=/nix-upper,workdir=/nix-work /nix/store
+  ```
 - Run `nix-daemon` on host, share the socket into containers
 
 ### Option B: Local Binary Cache with nix-serve
@@ -201,6 +212,31 @@ devbox generate dockerfile
 ```
 
 These integrate with Cachix / Jetify Cache for binary caching, so builds pull pre-compiled packages rather than compiling from source.
+
+### Option F: Nix-Built Container Images (No Dockerfile)
+
+For production-quality minimal images, `dockerTools.buildLayeredImage` creates one Docker layer per store path, enabling efficient layer caching:
+
+```nix
+pkgs.dockerTools.buildLayeredImage {
+  name = "pokeplanner-session";
+  tag = "latest";
+  contents = [ myDevShell ];
+  config.WorkingDir = "/workspace";
+}
+```
+
+For fastest rebuild/push cycles, [nix2container](https://github.com/nlewo/nix2container) avoids writing tarballs to the Nix store entirely and skips already-pushed layers.
+
+### Option G: Named Docker Volume for `/nix` (CI/Dev)
+
+For iterative dev where you want the Nix store to persist across container runs:
+
+```bash
+docker run -v nix-store:/nix myimage nix build .#myapp
+```
+
+The named volume persists the store, so subsequent builds are fast. Simplest caching approach for CI.
 
 ### Recommended Approach
 
