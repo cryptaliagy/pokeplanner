@@ -62,6 +62,9 @@ reqwest = { version = "0.12", features = ["json"] }
 # Rate limiting
 governor = "0.8"
 
+# Home directory resolution
+dirs = "6"
+
 # Testing
 wiremock = "0.6"
 http-body-util = "0.1"

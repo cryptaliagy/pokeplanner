@@ -1,5 +1,7 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 
+use clap::Parser;
 use pokeplanner_core::{
     AppError, PokemonQueryParams, SortField, SortOrder, TeamPlanRequest, TeamSource,
 };
@@ -312,26 +314,54 @@ impl GrpcService for GrpcHandler {
     }
 }
 
+fn default_data_dir() -> PathBuf {
+    dirs::home_dir()
+        .map(|h| h.join(".pokeplanner"))
+        .unwrap_or_else(|| PathBuf::from(".pokeplanner"))
+}
+
+#[derive(Parser)]
+#[command(name = "pokeplanner-grpc", about = "PokePlanner gRPC API server", version)]
+struct Cli {
+    /// Host address to bind to
+    #[arg(long, default_value = "0.0.0.0")]
+    host: String,
+
+    /// Port to listen on
+    #[arg(short, long, default_value_t = 50051)]
+    port: u16,
+
+    /// Directory for cached PokeAPI data
+    #[arg(long, default_value_os_t = default_data_dir().join("cache"))]
+    cache_dir: PathBuf,
+
+    /// Directory for job storage data
+    #[arg(long, default_value_os_t = default_data_dir().join("jobs"))]
+    data_dir: PathBuf,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .init();
 
+    let cli = Cli::parse();
+
     let storage = Arc::new(
-        JsonFileStorage::new("data/jobs".into())
+        JsonFileStorage::new(cli.data_dir)
             .await
             .expect("Failed to initialize storage"),
     );
     let pokeapi = Arc::new(
-        PokeApiHttpClient::new("data/cache".into())
+        PokeApiHttpClient::new(cli.cache_dir)
             .await
             .expect("Failed to initialize PokeAPI client"),
     );
     let service = Arc::new(PokePlannerService::new(storage, pokeapi));
 
     let handler = GrpcHandler { service };
-    let addr = "0.0.0.0:50051".parse()?;
+    let addr = format!("{}:{}", cli.host, cli.port).parse()?;
     tracing::info!("gRPC server listening on {addr}");
 
     Server::builder()

@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use clap::{Parser, Subcommand, ValueEnum};
@@ -8,9 +9,23 @@ use pokeplanner_storage::JsonFileStorage;
 use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
 
+fn default_data_dir() -> PathBuf {
+    dirs::home_dir()
+        .map(|h| h.join(".pokeplanner"))
+        .unwrap_or_else(|| PathBuf::from(".pokeplanner"))
+}
+
 #[derive(Parser)]
 #[command(name = "pokeplanner", about = "PokePlanner CLI", version)]
 struct Cli {
+    /// Directory for cached PokeAPI data
+    #[arg(long, global = true, default_value_os_t = default_data_dir().join("cache"))]
+    cache_dir: PathBuf,
+
+    /// Directory for job storage data
+    #[arg(long, global = true, default_value_os_t = default_data_dir().join("jobs"))]
+    data_dir: PathBuf,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -166,8 +181,8 @@ async fn main() -> anyhow::Result<()> {
 
     let cli = Cli::parse();
 
-    let storage = Arc::new(JsonFileStorage::new("data/jobs".into()).await?);
-    let pokeapi = Arc::new(PokeApiHttpClient::new("data/cache".into()).await?);
+    let storage = Arc::new(JsonFileStorage::new(cli.data_dir).await?);
+    let pokeapi = Arc::new(PokeApiHttpClient::new(cli.cache_dir).await?);
     let service = PokePlannerService::new(storage, pokeapi);
 
     match cli.command {
