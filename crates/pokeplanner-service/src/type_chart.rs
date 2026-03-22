@@ -220,7 +220,10 @@ impl TypeChart {
 
     /// Compute defensive weaknesses for a pokemon (types that deal >= multiplier).
     /// Returns lists of (2x weaknesses, 4x weaknesses).
-    pub fn pokemon_weaknesses(&self, defender_types: &[PokemonType]) -> (Vec<PokemonType>, Vec<PokemonType>) {
+    pub fn pokemon_weaknesses(
+        &self,
+        defender_types: &[PokemonType],
+    ) -> (Vec<PokemonType>, Vec<PokemonType>) {
         let mut weak_2x = Vec::new();
         let mut weak_4x = Vec::new();
         for &atk in &PokemonType::ALL {

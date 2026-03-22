@@ -16,7 +16,11 @@ fn default_data_dir() -> PathBuf {
 }
 
 #[derive(Parser)]
-#[command(name = "pokeplanner-rest", about = "PokePlanner REST API server", version)]
+#[command(
+    name = "pokeplanner-rest",
+    about = "PokePlanner REST API server",
+    version
+)]
 struct Cli {
     /// Host address to bind to
     #[arg(long, default_value = "0.0.0.0")]

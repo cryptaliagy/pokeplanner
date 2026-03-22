@@ -24,6 +24,7 @@ async fn setup() -> (MockServer, PokeApiHttpClient, TempDir) {
         base_url: server.uri(),
         requests_per_second: 100,
         burst_size: 100,
+        concurrent_requests: 10,
     };
     let client = PokeApiHttpClient::with_config(config).await.unwrap();
     (server, client, cache_dir)

@@ -27,6 +27,10 @@ pub struct TeamPlanRequest {
     /// Species names to exclude (removes all forms/variants of that species).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub exclude_species: Vec<String>,
+    /// Variant type keywords to exclude (e.g., "mega", "gmax", "alola").
+    /// Filters out non-default forms whose variant suffix contains any of these keywords.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exclude_variant_types: Vec<String>,
     /// Enemy pokemon names to counter-team against. When set, the planner
     /// optimizes for coverage against this specific team rather than general coverage.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -151,6 +155,39 @@ mod tests {
         assert!(!req.no_cache);
         assert!(req.top_k.is_none());
         assert!(req.include_variants);
+        assert!(req.exclude_variant_types.is_empty());
+    }
+
+    #[test]
+    fn test_team_plan_request_exclude_variant_types_serde() {
+        let json = r#"{"source":{"game":{"version_groups":["red-blue"]}},"exclude_variant_types":["mega","gmax"]}"#;
+        let req: TeamPlanRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.exclude_variant_types, vec!["mega", "gmax"]);
+
+        // Round-trip: should serialize back
+        let serialized = serde_json::to_string(&req).unwrap();
+        let req2: TeamPlanRequest = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(req2.exclude_variant_types, vec!["mega", "gmax"]);
+    }
+
+    #[test]
+    fn test_team_plan_request_exclude_variant_types_omitted() {
+        // When omitted, should not appear in serialized output
+        let req = TeamPlanRequest {
+            source: TeamSource::Game {
+                version_groups: vec!["red-blue".to_string()],
+            },
+            min_bst: None,
+            no_cache: false,
+            top_k: None,
+            include_variants: true,
+            exclude: Vec::new(),
+            exclude_species: Vec::new(),
+            exclude_variant_types: Vec::new(),
+            counter_team: None,
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(!json.contains("exclude_variant_types"));
     }
 
     #[test]

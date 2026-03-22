@@ -283,6 +283,7 @@ impl GrpcService for GrpcHandler {
             include_variants: inner.include_variants,
             exclude: inner.exclude,
             exclude_species: inner.exclude_species,
+            exclude_variant_types: inner.exclude_variant_types,
             counter_team: if inner.counter_team.is_empty() {
                 None
             } else {
@@ -325,7 +326,11 @@ fn default_data_dir() -> PathBuf {
 }
 
 #[derive(Parser)]
-#[command(name = "pokeplanner-grpc", about = "PokePlanner gRPC API server", version)]
+#[command(
+    name = "pokeplanner-grpc",
+    about = "PokePlanner gRPC API server",
+    version
+)]
 struct Cli {
     /// Host address to bind to
     #[arg(long, default_value = "0.0.0.0")]

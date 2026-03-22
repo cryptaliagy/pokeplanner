@@ -146,6 +146,66 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
             .await
     }
 
+    /// Get a pokemon's learnset, optionally filtered by version group.
+    pub async fn get_pokemon_learnset(
+        &self,
+        pokemon_name: &str,
+        version_group: Option<&str>,
+        no_cache: bool,
+    ) -> Result<Vec<pokeplanner_core::LearnsetEntry>, AppError> {
+        self.pokeapi
+            .get_pokemon_learnset(pokemon_name, version_group, no_cache)
+            .await
+    }
+
+    /// Get detailed learnset with move details resolved.
+    pub async fn get_pokemon_learnset_detailed(
+        &self,
+        pokemon_name: &str,
+        version_group: Option<&str>,
+        no_cache: bool,
+    ) -> Result<Vec<pokeplanner_core::DetailedLearnsetEntry>, AppError> {
+        let learnset = self
+            .pokeapi
+            .get_pokemon_learnset(pokemon_name, version_group, no_cache)
+            .await?;
+
+        // Deduplicate move names to avoid redundant fetches
+        let unique_moves: std::collections::HashSet<String> =
+            learnset.iter().map(|e| e.move_name.clone()).collect();
+        let mut move_cache: std::collections::HashMap<String, pokeplanner_core::Move> =
+            std::collections::HashMap::new();
+        for name in unique_moves {
+            match self.pokeapi.get_move(&name, no_cache).await {
+                Ok(m) => {
+                    move_cache.insert(name, m);
+                }
+                Err(e) => warn!("Failed to fetch move {name}: {e}"),
+            }
+        }
+
+        let mut detailed = Vec::new();
+        for entry in learnset {
+            if let Some(m) = move_cache.get(&entry.move_name) {
+                detailed.push(pokeplanner_core::DetailedLearnsetEntry {
+                    move_details: m.clone(),
+                    learn_method: entry.learn_method,
+                    level: entry.level,
+                });
+            }
+        }
+        Ok(detailed)
+    }
+
+    /// Get details for a single move.
+    pub async fn get_move(
+        &self,
+        name: &str,
+        no_cache: bool,
+    ) -> Result<pokeplanner_core::Move, AppError> {
+        self.pokeapi.get_move(name, no_cache).await
+    }
+
     /// Submit a team planning job. Returns the job ID immediately.
     pub async fn submit_team_plan(&self, request: TeamPlanRequest) -> Result<JobId, AppError> {
         let job = Job::with_kind(JobKind::TeamPlan(request.clone()));
@@ -263,6 +323,22 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
         }
         if !request.exclude_species.is_empty() {
             filtered.retain(|p| !request.exclude_species.iter().any(|e| e == &p.species_name));
+        }
+        if !request.exclude_variant_types.is_empty() {
+            filtered.retain(|p| {
+                if p.is_default_form {
+                    return true;
+                }
+                let suffix = p
+                    .form_name
+                    .strip_prefix(&p.species_name)
+                    .unwrap_or("")
+                    .to_lowercase();
+                !request
+                    .exclude_variant_types
+                    .iter()
+                    .any(|vt| suffix.contains(&vt.to_lowercase()))
+            });
         }
 
         if filtered.is_empty() {
@@ -511,13 +587,49 @@ mod tests {
                 entries: Vec::new(),
             })
         }
+
+        async fn get_pokemon_learnset(
+            &self,
+            _pokemon_name: &str,
+            _version_group: Option<&str>,
+            _no_cache: bool,
+        ) -> Result<Vec<pokeplanner_core::LearnsetEntry>, AppError> {
+            Ok(vec![])
+        }
+
+        async fn get_move(
+            &self,
+            _move_name: &str,
+            _no_cache: bool,
+        ) -> Result<pokeplanner_core::Move, AppError> {
+            Ok(pokeplanner_core::Move {
+                name: _move_name.to_string(),
+                move_type: PokemonType::Normal,
+                power: None,
+                accuracy: None,
+                pp: None,
+                damage_class: "status".to_string(),
+                priority: 0,
+                effect: None,
+            })
+        }
     }
 
     fn make_test_pokemon(name: &str, types: Vec<PokemonType>, bst: u32) -> Pokemon {
+        make_test_pokemon_variant(name, name, types, bst, true)
+    }
+
+    fn make_test_pokemon_variant(
+        species: &str,
+        form: &str,
+        types: Vec<PokemonType>,
+        bst: u32,
+        is_default: bool,
+    ) -> Pokemon {
         let per = bst / 6;
         Pokemon {
-            species_name: name.to_string(),
-            form_name: name.to_string(),
+            species_name: species.to_string(),
+            form_name: form.to_string(),
             pokedex_number: 1,
             types,
             stats: BaseStats {
@@ -528,7 +640,7 @@ mod tests {
                 special_defense: per,
                 speed: per,
             },
-            is_default_form: true,
+            is_default_form: is_default,
         }
     }
 
@@ -668,5 +780,241 @@ mod tests {
             .unwrap();
         // With mock returning all Normal types and empty type chart, coverage will reflect that
         assert!(coverage.coverage_score >= 0.0);
+    }
+
+    /// Mock that returns pokemon with variant forms for testing exclude_variant_types.
+    struct MockPokeApiWithVariants;
+
+    impl PokeApiClient for MockPokeApiWithVariants {
+        async fn get_version_groups(
+            &self,
+            _no_cache: bool,
+        ) -> Result<Vec<VersionGroupInfo>, AppError> {
+            Ok(vec![])
+        }
+
+        async fn get_game_pokemon(
+            &self,
+            _version_group: &str,
+            _no_cache: bool,
+            _include_variants: bool,
+        ) -> Result<Vec<Pokemon>, AppError> {
+            Ok(vec![
+                make_test_pokemon(
+                    "charizard",
+                    vec![PokemonType::Fire, PokemonType::Flying],
+                    534,
+                ),
+                make_test_pokemon_variant(
+                    "charizard",
+                    "charizard-mega-x",
+                    vec![PokemonType::Fire, PokemonType::Dragon],
+                    634,
+                    false,
+                ),
+                make_test_pokemon_variant(
+                    "charizard",
+                    "charizard-mega-y",
+                    vec![PokemonType::Fire, PokemonType::Flying],
+                    634,
+                    false,
+                ),
+                make_test_pokemon_variant(
+                    "charizard",
+                    "charizard-gmax",
+                    vec![PokemonType::Fire, PokemonType::Flying],
+                    534,
+                    false,
+                ),
+                make_test_pokemon("ninetales", vec![PokemonType::Fire], 505),
+                make_test_pokemon_variant(
+                    "ninetales",
+                    "ninetales-alola",
+                    vec![PokemonType::Ice, PokemonType::Fairy],
+                    505,
+                    false,
+                ),
+                make_test_pokemon("pikachu", vec![PokemonType::Electric], 320),
+            ])
+        }
+
+        async fn get_pokemon(&self, name: &str, _no_cache: bool) -> Result<Pokemon, AppError> {
+            Ok(make_test_pokemon(name, vec![PokemonType::Normal], 400))
+        }
+
+        async fn get_species_varieties(
+            &self,
+            _species_name: &str,
+            _no_cache: bool,
+        ) -> Result<Vec<Pokemon>, AppError> {
+            Ok(vec![])
+        }
+
+        async fn get_pokedex_pokemon(
+            &self,
+            _pokedex_name: &str,
+            _no_cache: bool,
+            _include_variants: bool,
+        ) -> Result<Vec<Pokemon>, AppError> {
+            Ok(vec![])
+        }
+
+        async fn get_type_chart(
+            &self,
+            _no_cache: bool,
+        ) -> Result<pokeplanner_pokeapi::TypeEffectivenessData, AppError> {
+            Ok(pokeplanner_pokeapi::TypeEffectivenessData {
+                entries: Vec::new(),
+            })
+        }
+
+        async fn get_pokemon_learnset(
+            &self,
+            _pokemon_name: &str,
+            _version_group: Option<&str>,
+            _no_cache: bool,
+        ) -> Result<Vec<pokeplanner_core::LearnsetEntry>, AppError> {
+            Ok(vec![])
+        }
+
+        async fn get_move(
+            &self,
+            _move_name: &str,
+            _no_cache: bool,
+        ) -> Result<pokeplanner_core::Move, AppError> {
+            Ok(pokeplanner_core::Move {
+                name: _move_name.to_string(),
+                move_type: PokemonType::Normal,
+                power: None,
+                accuracy: None,
+                pp: None,
+                damage_class: "status".to_string(),
+                priority: 0,
+                effect: None,
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn test_exclude_variant_types_filters_megas() {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = Arc::new(
+            JsonFileStorage::new(dir.path().to_path_buf())
+                .await
+                .unwrap(),
+        );
+        let pokeapi = Arc::new(MockPokeApiWithVariants);
+        let svc = PokePlannerService::new(storage, pokeapi);
+
+        let request = TeamPlanRequest {
+            source: TeamSource::Game {
+                version_groups: vec!["test".to_string()],
+            },
+            min_bst: None,
+            no_cache: false,
+            top_k: Some(1),
+            include_variants: true,
+            exclude: Vec::new(),
+            exclude_species: Vec::new(),
+            exclude_variant_types: vec!["mega".to_string()],
+            counter_team: None,
+        };
+
+        let job_id = svc.submit_team_plan(request).await.unwrap();
+
+        // Wait for job to complete
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+            let job = svc.get_job(&job_id).await.unwrap();
+            match job.status {
+                JobStatus::Completed => {
+                    let data = job.result.unwrap().data.unwrap();
+                    let plans: Vec<pokeplanner_core::TeamPlan> =
+                        serde_json::from_value(data).unwrap();
+                    // Megas should be excluded; gmax and alola should remain
+                    let all_members: Vec<&str> = plans
+                        .iter()
+                        .flat_map(|p| p.team.iter().map(|m| m.pokemon.form_name.as_str()))
+                        .collect();
+                    assert!(
+                        !all_members.iter().any(|n| n.contains("mega")),
+                        "mega variants should be excluded, got: {all_members:?}"
+                    );
+                    break;
+                }
+                JobStatus::Failed => {
+                    panic!(
+                        "Job failed: {}",
+                        job.result.map(|r| r.message).unwrap_or_default()
+                    );
+                }
+                _ => continue,
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_exclude_variant_types_multiple() {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = Arc::new(
+            JsonFileStorage::new(dir.path().to_path_buf())
+                .await
+                .unwrap(),
+        );
+        let pokeapi = Arc::new(MockPokeApiWithVariants);
+        let svc = PokePlannerService::new(storage, pokeapi);
+
+        let request = TeamPlanRequest {
+            source: TeamSource::Game {
+                version_groups: vec!["test".to_string()],
+            },
+            min_bst: None,
+            no_cache: false,
+            top_k: Some(1),
+            include_variants: true,
+            exclude: Vec::new(),
+            exclude_species: Vec::new(),
+            exclude_variant_types: vec![
+                "mega".to_string(),
+                "gmax".to_string(),
+                "alola".to_string(),
+            ],
+            counter_team: None,
+        };
+
+        let job_id = svc.submit_team_plan(request).await.unwrap();
+
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+            let job = svc.get_job(&job_id).await.unwrap();
+            match job.status {
+                JobStatus::Completed => {
+                    let data = job.result.unwrap().data.unwrap();
+                    let plans: Vec<pokeplanner_core::TeamPlan> =
+                        serde_json::from_value(data).unwrap();
+                    // Only base forms should remain: charizard, ninetales, pikachu
+                    let all_members: Vec<&str> = plans
+                        .iter()
+                        .flat_map(|p| p.team.iter().map(|m| m.pokemon.form_name.as_str()))
+                        .collect();
+                    for name in &all_members {
+                        assert!(
+                            !name.contains("mega")
+                                && !name.contains("gmax")
+                                && !name.contains("alola"),
+                            "variant should be excluded, got: {name}"
+                        );
+                    }
+                    break;
+                }
+                JobStatus::Failed => {
+                    panic!(
+                        "Job failed: {}",
+                        job.result.map(|r| r.message).unwrap_or_default()
+                    );
+                }
+                _ => continue,
+            }
+        }
     }
 }
