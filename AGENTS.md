@@ -31,7 +31,7 @@
 
 ## Architecture Quick Reference
 
-- **Core types**: `crates/pokeplanner-core/` — shared models, errors, job types, team types
+- **Core types**: `crates/pokeplanner-core/` — shared models (Pokemon, Move, LearnsetEntry, DetailedLearnsetEntry), errors, job types, team types
 - **Storage**: `crates/pokeplanner-storage/` — `Storage` trait + `JsonFileStorage`
 - **PokeAPI Client**: `crates/pokeplanner-pokeapi/` — `PokeApiClient` trait + `PokeApiHttpClient` with disk cache and rate limiting
 - **Service**: `crates/pokeplanner-service/` — business logic, job orchestration, team planner, type chart
@@ -130,7 +130,10 @@ Jobs are submitted, assigned a UUID, and processed asynchronously via `tokio::sp
 | `list-games` | List available games (version groups) |
 | `game-pokemon <game>` | List pokemon for a game (`--min-bst`, `--sort-by`, `--sort-order`, `--include-variants`) |
 | `pokedex-pokemon <pokedex>` | List pokemon from a pokedex (`--min-bst`, `--sort-by`, `--sort-order`) |
-| `pokemon <name>` | Get pokemon details (colored stat bars, types) |
+| `pokemon show <name>` | Get pokemon details (colored stat bars, types, other forms) (`--show-learnset`, `--learnset-game`) |
+| `pokemon search [filters]` | Search pokemon by type, stats, name, game, variant type (see below) |
+| `moves show <name>` | Get detailed move info (type, power, accuracy, pp, effect) |
+| `moves search <pokemon>` | Search a pokemon's learnset (`--game`, `--type`, `--damage-class`, `--min-power`, `--learn-method`, `--sort-by`) |
 | `plan-team` | Plan optimal team (`--game` (CSV) or `--pokedex` or `--pokemon`, `--min-bst`, `--top-k`, `--exclude-variant-type`) |
 | `analyze-team <names>` | Analyze type coverage |
 | `cache stats` | Show cache statistics (entry counts, sizes, location) |

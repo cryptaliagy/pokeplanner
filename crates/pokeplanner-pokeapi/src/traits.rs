@@ -1,6 +1,6 @@
 use std::future::Future;
 
-use pokeplanner_core::{AppError, Pokemon, PokemonType};
+use pokeplanner_core::{AppError, LearnsetEntry, Move, Pokemon, PokemonType};
 
 use crate::VersionGroupInfo;
 
@@ -42,6 +42,19 @@ pub trait PokeApiClient: Send + Sync + 'static {
         &self,
         no_cache: bool,
     ) -> impl Future<Output = Result<TypeEffectivenessData, AppError>> + Send;
+
+    fn get_pokemon_learnset(
+        &self,
+        pokemon_name: &str,
+        version_group: Option<&str>,
+        no_cache: bool,
+    ) -> impl Future<Output = Result<Vec<LearnsetEntry>, AppError>> + Send;
+
+    fn get_move(
+        &self,
+        move_name: &str,
+        no_cache: bool,
+    ) -> impl Future<Output = Result<Move, AppError>> + Send;
 }
 
 /// Raw type effectiveness data from PokeAPI, to be consumed by the TypeChart in the service layer.
