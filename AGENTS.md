@@ -75,8 +75,8 @@ Pokedex entries reference **species only**. Megas, regional forms, and Gigantama
 
 ## Caching Strategy
 
-- Raw API responses cached per-resource in `data/cache/{category}/{key}.json`
-- Aggregated results cached in `data/cache/game-pokemon/` and `data/cache/type-chart/`
+- Raw API responses cached per-resource in `~/.pokeplanner/cache/{category}/{key}.json`
+- Aggregated results cached in `~/.pokeplanner/cache/game-pokemon/` and `~/.pokeplanner/cache/type-chart/`
 - 1-year TTL. Bypass with `--no-cache` / `?no_cache=true` / gRPC `no_cache: true`
 - On cache corruption: log, delete, treat as miss
 
@@ -127,15 +127,11 @@ Jobs are submitted, assigned a UUID, and processed asynchronously via `tokio::sp
 ### CLI
 | Command | Description |
 |---------|-------------|
-| `hello` | Hello world |
-| `health` | Service health check |
-| `submit-job` | Submit a generic job |
-| `get-job <id>` | Get job status |
-| `list-jobs` | List all jobs |
 | `list-games` | List available games (version groups) |
 | `game-pokemon <game>` | List pokemon for a game (`--min-bst`, `--sort-by`, `--sort-order`, `--include-variants`) |
-| `pokemon <name>` | Get pokemon details |
-| `plan-team` | Plan optimal team (`--game` or `--pokemon`, `--min-bst`, `--top-k`, `--wait`) |
+| `pokedex-pokemon <pokedex>` | List pokemon from a pokedex (`--min-bst`, `--sort-by`, `--sort-order`) |
+| `pokemon <name>` | Get pokemon details (colored stat bars, types) |
+| `plan-team` | Plan optimal team (`--game` (CSV) or `--pokedex` or `--pokemon`, `--min-bst`, `--top-k`) |
 | `analyze-team <names>` | Analyze type coverage |
 
 ## Testing
@@ -158,7 +154,8 @@ cargo test                     # Run all tests
 cargo run -p pokeplanner-cli -- hello                          # CLI hello world
 cargo run -p pokeplanner-cli -- list-games                     # List available games
 cargo run -p pokeplanner-cli -- game-pokemon red-blue          # Pokemon in Red/Blue
-cargo run -p pokeplanner-cli -- plan-team --game red-blue --wait  # Plan optimal team
-cargo run -p pokeplanner-api-rest                              # Start REST server
-cargo run -p pokeplanner-api-grpc                              # Start gRPC server
+cargo run -p pokeplanner-cli -- plan-team --game red-blue --wait               # Plan optimal team
+cargo run -p pokeplanner-cli -- plan-team --game red-blue,gold-silver --wait  # Plan across games
+cargo run -p pokeplanner-api-rest                              # Start REST server (--host, --port, --cache-dir, --data-dir)
+cargo run -p pokeplanner-api-grpc                              # Start gRPC server (--host, --port, --cache-dir, --data-dir)
 ```
