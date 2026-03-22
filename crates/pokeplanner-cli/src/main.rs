@@ -3,7 +3,7 @@ mod unusable;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use colored::Colorize;
 use pokeplanner_core::{
     PokemonQueryParams, PokemonType, SortField, SortOrder, TeamPlanRequest, TeamSource,
@@ -167,7 +167,80 @@ enum UnusableAction {
     Clear,
 }
 
+#[derive(Args)]
+struct PokemonSearchArgs {
+    /// Search within a game (version group name, e.g., "red-blue")
+    #[arg(long, value_delimiter = ',')]
+    game: Option<Vec<String>>,
+    /// Search within a pokedex (e.g., "national", "kanto")
+    #[arg(long)]
+    pokedex: Option<String>,
+
+    /// Filter by name (substring match on form or species name)
+    #[arg(long)]
+    name: Option<String>,
+
+    /// Filter by type (comma-separated, e.g., "fire", "fire,dragon")
+    #[arg(long, value_delimiter = ',')]
+    r#type: Option<Vec<String>>,
+    /// Exclude pokemon with these types (comma-separated, e.g., "poison,fairy")
+    #[arg(long, value_delimiter = ',')]
+    not_type: Option<Vec<String>>,
+    /// Only show single-type pokemon
+    #[arg(long)]
+    mono_type: bool,
+    /// Only show dual-type pokemon
+    #[arg(long)]
+    dual_type: bool,
+
+    /// Filter by BST (e.g., "ge500", "lt400", "eq600")
+    #[arg(long)]
+    bst: Option<String>,
+    /// Filter by HP stat (e.g., "ge100", "lt50")
+    #[arg(long)]
+    hp: Option<String>,
+    /// Filter by Attack stat
+    #[arg(long)]
+    attack: Option<String>,
+    /// Filter by Defense stat
+    #[arg(long)]
+    defense: Option<String>,
+    /// Filter by Special Attack stat
+    #[arg(long)]
+    special_attack: Option<String>,
+    /// Filter by Special Defense stat
+    #[arg(long)]
+    special_defense: Option<String>,
+    /// Filter by Speed stat
+    #[arg(long)]
+    speed: Option<String>,
+
+    /// Only show default (base) forms
+    #[arg(long)]
+    default_only: bool,
+    /// Only show variant (non-default) forms
+    #[arg(long)]
+    variants_only: bool,
+    /// Only show specific variant types (e.g., "mega", "alola", "gmax")
+    #[arg(long, value_delimiter = ',')]
+    variant_type: Option<Vec<String>>,
+
+    /// Sort results by field
+    #[arg(long, value_enum)]
+    sort_by: Option<CliSortField>,
+    /// Sort order
+    #[arg(long, value_enum, default_value = "asc")]
+    sort_order: CliSortOrder,
+    /// Limit number of results
+    #[arg(long)]
+    limit: Option<usize>,
+
+    #[arg(long)]
+    no_cache: bool,
+}
+
 #[derive(Subcommand)]
+#[allow(clippy::large_enum_variant)]
 enum PokemonAction {
     /// Get details for a specific pokemon
     Show {
@@ -183,76 +256,7 @@ enum PokemonAction {
         learnset_game: Option<String>,
     },
     /// Search for pokemon matching criteria
-    Search {
-        /// Search within a game (version group name, e.g., "red-blue")
-        #[arg(long, value_delimiter = ',')]
-        game: Option<Vec<String>>,
-        /// Search within a pokedex (e.g., "national", "kanto")
-        #[arg(long)]
-        pokedex: Option<String>,
-
-        /// Filter by name (substring match on form or species name)
-        #[arg(long)]
-        name: Option<String>,
-
-        /// Filter by type (comma-separated, e.g., "fire", "fire,dragon")
-        #[arg(long, value_delimiter = ',')]
-        r#type: Option<Vec<String>>,
-        /// Exclude pokemon with these types (comma-separated, e.g., "poison,fairy")
-        #[arg(long, value_delimiter = ',')]
-        not_type: Option<Vec<String>>,
-        /// Only show single-type pokemon
-        #[arg(long)]
-        mono_type: bool,
-        /// Only show dual-type pokemon
-        #[arg(long)]
-        dual_type: bool,
-
-        /// Filter by BST (e.g., "ge500", "lt400", "eq600")
-        #[arg(long)]
-        bst: Option<String>,
-        /// Filter by HP stat (e.g., "ge100", "lt50")
-        #[arg(long)]
-        hp: Option<String>,
-        /// Filter by Attack stat
-        #[arg(long)]
-        attack: Option<String>,
-        /// Filter by Defense stat
-        #[arg(long)]
-        defense: Option<String>,
-        /// Filter by Special Attack stat
-        #[arg(long)]
-        special_attack: Option<String>,
-        /// Filter by Special Defense stat
-        #[arg(long)]
-        special_defense: Option<String>,
-        /// Filter by Speed stat
-        #[arg(long)]
-        speed: Option<String>,
-
-        /// Only show default (base) forms
-        #[arg(long)]
-        default_only: bool,
-        /// Only show variant (non-default) forms
-        #[arg(long)]
-        variants_only: bool,
-        /// Only show specific variant types (e.g., "mega", "alola", "gmax")
-        #[arg(long, value_delimiter = ',')]
-        variant_type: Option<Vec<String>>,
-
-        /// Sort results by field
-        #[arg(long, value_enum)]
-        sort_by: Option<CliSortField>,
-        /// Sort order
-        #[arg(long, value_enum, default_value = "asc")]
-        sort_order: CliSortOrder,
-        /// Limit number of results
-        #[arg(long)]
-        limit: Option<usize>,
-
-        #[arg(long)]
-        no_cache: bool,
-    },
+    Search(PokemonSearchArgs),
 }
 
 #[derive(Subcommand)]
@@ -609,16 +613,16 @@ async fn make_populate_client(cache_dir: &std::path::Path) -> anyhow::Result<Pok
 /// Returns a closure that tests a u32 value against the filter.
 fn parse_stat_filter(s: &str) -> anyhow::Result<Box<dyn Fn(u32) -> bool>> {
     let s = s.trim();
-    let (op, val_str) = if s.starts_with("ge") {
-        ("ge", &s[2..])
-    } else if s.starts_with("gt") {
-        ("gt", &s[2..])
-    } else if s.starts_with("le") {
-        ("le", &s[2..])
-    } else if s.starts_with("lt") {
-        ("lt", &s[2..])
-    } else if s.starts_with("eq") {
-        ("eq", &s[2..])
+    let (op, val_str) = if let Some(rest) = s.strip_prefix("ge") {
+        ("ge", rest)
+    } else if let Some(rest) = s.strip_prefix("gt") {
+        ("gt", rest)
+    } else if let Some(rest) = s.strip_prefix("le") {
+        ("le", rest)
+    } else if let Some(rest) = s.strip_prefix("lt") {
+        ("lt", rest)
+    } else if let Some(rest) = s.strip_prefix("eq") {
+        ("eq", rest)
     } else {
         // Default: treat bare number as "ge"
         ("ge", s)
@@ -692,7 +696,7 @@ async fn handle_pokemon_action<
                 print_learnset(&learnset);
             }
         }
-        PokemonAction::Search {
+        PokemonAction::Search(PokemonSearchArgs {
             game,
             pokedex,
             name,
@@ -714,7 +718,7 @@ async fn handle_pokemon_action<
             sort_order,
             limit,
             no_cache,
-        } => {
+        }) => {
             // Step 1: Fetch candidate pokemon from source
             // Include all variants; we'll filter later
             let mut candidates = if let Some(games) = game {
@@ -1326,27 +1330,17 @@ async fn handle_move_action<
 fn print_move_detail(m: &pokeplanner_core::Move) {
     println!();
     println!("  {}", m.name.bold());
+    print!("  Type: {} ", color_type(&m.move_type));
+    print!("{}", format!("Class: {}", m.damage_class).dimmed());
+    if m.priority != 0 {
+        print!(" Priority: {:+}", m.priority);
+    }
+    println!();
     println!(
-        "  {} {} {}",
-        format!("Type: {}", color_type(&m.move_type)),
-        format!("Class: {}", m.damage_class).dimmed(),
-        if m.priority != 0 {
-            format!("Priority: {:+}", m.priority)
-        } else {
-            String::new()
-        },
-    );
-    println!(
-        "  {} {} {}",
-        format!(
-            "Power: {}",
-            m.power.map(|p| p.to_string()).unwrap_or("-".into())
-        ),
-        format!(
-            "Accuracy: {}",
-            m.accuracy.map(|a| format!("{a}%")).unwrap_or("-".into())
-        ),
-        format!("PP: {}", m.pp.map(|p| p.to_string()).unwrap_or("-".into())),
+        "  Power: {} Accuracy: {} PP: {}",
+        m.power.map(|p| p.to_string()).unwrap_or("-".into()),
+        m.accuracy.map(|a| format!("{a}%")).unwrap_or("-".into()),
+        m.pp.map(|p| p.to_string()).unwrap_or("-".into()),
     );
     if let Some(ref effect) = m.effect {
         println!();
