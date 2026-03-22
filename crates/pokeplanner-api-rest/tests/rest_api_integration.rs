@@ -4,7 +4,9 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
 use pokeplanner_core::{AppError, BaseStats, Pokemon, PokemonType};
-use pokeplanner_pokeapi::{PokeApiClient, TypeEffectivenessData, TypeEffectivenessEntry, VersionGroupInfo};
+use pokeplanner_pokeapi::{
+    PokeApiClient, TypeEffectivenessData, TypeEffectivenessEntry, VersionGroupInfo,
+};
 use pokeplanner_service::PokePlannerService;
 use pokeplanner_storage::JsonFileStorage;
 use serde_json::Value;
@@ -37,14 +39,46 @@ fn make_test_pokemon(name: &str, types: Vec<PokemonType>, bst: u32) -> Pokemon {
 fn test_type_chart() -> TypeEffectivenessData {
     TypeEffectivenessData {
         entries: vec![
-            TypeEffectivenessEntry { attack_type: PokemonType::Fire, defend_type: PokemonType::Grass, multiplier: 2.0 },
-            TypeEffectivenessEntry { attack_type: PokemonType::Water, defend_type: PokemonType::Fire, multiplier: 2.0 },
-            TypeEffectivenessEntry { attack_type: PokemonType::Grass, defend_type: PokemonType::Water, multiplier: 2.0 },
-            TypeEffectivenessEntry { attack_type: PokemonType::Electric, defend_type: PokemonType::Water, multiplier: 2.0 },
-            TypeEffectivenessEntry { attack_type: PokemonType::Fire, defend_type: PokemonType::Water, multiplier: 0.5 },
-            TypeEffectivenessEntry { attack_type: PokemonType::Water, defend_type: PokemonType::Grass, multiplier: 0.5 },
-            TypeEffectivenessEntry { attack_type: PokemonType::Grass, defend_type: PokemonType::Fire, multiplier: 0.5 },
-            TypeEffectivenessEntry { attack_type: PokemonType::Normal, defend_type: PokemonType::Ghost, multiplier: 0.0 },
+            TypeEffectivenessEntry {
+                attack_type: PokemonType::Fire,
+                defend_type: PokemonType::Grass,
+                multiplier: 2.0,
+            },
+            TypeEffectivenessEntry {
+                attack_type: PokemonType::Water,
+                defend_type: PokemonType::Fire,
+                multiplier: 2.0,
+            },
+            TypeEffectivenessEntry {
+                attack_type: PokemonType::Grass,
+                defend_type: PokemonType::Water,
+                multiplier: 2.0,
+            },
+            TypeEffectivenessEntry {
+                attack_type: PokemonType::Electric,
+                defend_type: PokemonType::Water,
+                multiplier: 2.0,
+            },
+            TypeEffectivenessEntry {
+                attack_type: PokemonType::Fire,
+                defend_type: PokemonType::Water,
+                multiplier: 0.5,
+            },
+            TypeEffectivenessEntry {
+                attack_type: PokemonType::Water,
+                defend_type: PokemonType::Grass,
+                multiplier: 0.5,
+            },
+            TypeEffectivenessEntry {
+                attack_type: PokemonType::Grass,
+                defend_type: PokemonType::Fire,
+                multiplier: 0.5,
+            },
+            TypeEffectivenessEntry {
+                attack_type: PokemonType::Normal,
+                defend_type: PokemonType::Ghost,
+                multiplier: 0.0,
+            },
         ],
     }
 }
@@ -66,15 +100,27 @@ impl PokeApiClient for MockPokeApi {
     ) -> Result<Vec<Pokemon>, AppError> {
         Ok(vec![
             make_test_pokemon("pikachu", vec![PokemonType::Electric], 320),
-            make_test_pokemon("charizard", vec![PokemonType::Fire, PokemonType::Flying], 534),
+            make_test_pokemon(
+                "charizard",
+                vec![PokemonType::Fire, PokemonType::Flying],
+                534,
+            ),
             make_test_pokemon("mewtwo", vec![PokemonType::Psychic], 680),
         ])
     }
 
     async fn get_pokemon(&self, name: &str, _no_cache: bool) -> Result<Pokemon, AppError> {
         match name {
-            "pikachu" => Ok(make_test_pokemon("pikachu", vec![PokemonType::Electric], 320)),
-            "charizard" => Ok(make_test_pokemon("charizard", vec![PokemonType::Fire, PokemonType::Flying], 534)),
+            "pikachu" => Ok(make_test_pokemon(
+                "pikachu",
+                vec![PokemonType::Electric],
+                320,
+            )),
+            "charizard" => Ok(make_test_pokemon(
+                "charizard",
+                vec![PokemonType::Fire, PokemonType::Flying],
+                534,
+            )),
             "mewtwo" => Ok(make_test_pokemon("mewtwo", vec![PokemonType::Psychic], 680)),
             other => Err(AppError::NotFound(format!("Pokemon {other} not found"))),
         }
@@ -132,7 +178,11 @@ async fn test_health_response_body() {
 async fn test_get_pokemon_response_shape() {
     let app = make_app().await;
     let resp = app
-        .oneshot(Request::get("/pokemon/pikachu").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::get("/pokemon/pikachu")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
 
@@ -151,9 +201,11 @@ async fn test_game_pokemon_with_filters() {
     let app = make_app().await;
     let resp = app
         .oneshot(
-            Request::get("/version-groups/red-blue/pokemon?min_bst=400&sort_by=bst&sort_order=desc")
-                .body(Body::empty())
-                .unwrap(),
+            Request::get(
+                "/version-groups/red-blue/pokemon?min_bst=400&sort_by=bst&sort_order=desc",
+            )
+            .body(Body::empty())
+            .unwrap(),
         )
         .await
         .unwrap();

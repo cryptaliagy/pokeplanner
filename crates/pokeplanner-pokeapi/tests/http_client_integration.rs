@@ -13,8 +13,7 @@ fn load_fixture(name: &str) -> String {
 }
 
 fn json_response(fixture: &str) -> ResponseTemplate {
-    ResponseTemplate::new(200)
-        .set_body_raw(load_fixture(fixture), "application/json")
+    ResponseTemplate::new(200).set_body_raw(load_fixture(fixture), "application/json")
 }
 
 async fn setup() -> (MockServer, PokeApiHttpClient, TempDir) {
@@ -145,10 +144,9 @@ async fn test_get_type_chart() {
 
     // Verify some known relationships exist
     let has_entry = |atk: PokemonType, def: PokemonType, mult: f64| {
-        chart
-            .entries
-            .iter()
-            .any(|e| e.attack_type == atk && e.defend_type == def && (e.multiplier - mult).abs() < 0.01)
+        chart.entries.iter().any(|e| {
+            e.attack_type == atk && e.defend_type == def && (e.multiplier - mult).abs() < 0.01
+        })
     };
 
     // Fire is super effective against Grass
@@ -258,7 +256,10 @@ async fn test_get_species_varieties() {
     assert!(names.contains(&"charizard-mega-x"));
 
     // Mega should have dragon type
-    let mega = varieties.iter().find(|p| p.form_name == "charizard-mega-x").unwrap();
+    let mega = varieties
+        .iter()
+        .find(|p| p.form_name == "charizard-mega-x")
+        .unwrap();
     assert!(mega.types.contains(&PokemonType::Dragon));
     assert!(!mega.is_default_form);
 }

@@ -63,15 +63,22 @@ pub enum SortField {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum SortOrder {
+    #[default]
     Asc,
     Desc,
 }
 
-impl Default for SortOrder {
-    fn default() -> Self {
-        SortOrder::Asc
-    }
+/// Common parameters for querying and filtering pokemon lists.
+#[derive(Debug, Clone, Default)]
+pub struct PokemonQueryParams {
+    pub min_bst: Option<u32>,
+    pub no_cache: bool,
+    pub sort_by: Option<SortField>,
+    pub sort_order: SortOrder,
+    pub include_variants: bool,
+    pub limit: Option<usize>,
 }
 
 #[cfg(test)]

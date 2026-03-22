@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use clap::{Parser, Subcommand, ValueEnum};
-use pokeplanner_core::{SortField, SortOrder, TeamPlanRequest, TeamSource};
+use pokeplanner_core::{PokemonQueryParams, SortField, SortOrder, TeamPlanRequest, TeamSource};
 use pokeplanner_pokeapi::PokeApiHttpClient;
 use pokeplanner_service::PokePlannerService;
 use pokeplanner_storage::JsonFileStorage;
@@ -214,12 +214,14 @@ async fn main() -> anyhow::Result<()> {
             let pokemon = service
                 .get_game_pokemon(
                     &game,
-                    min_bst,
-                    no_cache,
-                    sort_by.map(SortField::from),
-                    sort_order.into(),
-                    include_variants,
-                    limit,
+                    &PokemonQueryParams {
+                        min_bst,
+                        no_cache,
+                        sort_by: sort_by.map(SortField::from),
+                        sort_order: sort_order.into(),
+                        include_variants,
+                        limit,
+                    },
                 )
                 .await?;
             print_pokemon_list(&pokemon);
@@ -236,12 +238,14 @@ async fn main() -> anyhow::Result<()> {
             let pokemon = service
                 .get_pokedex_pokemon(
                     &pokedex,
-                    min_bst,
-                    no_cache,
-                    sort_by.map(SortField::from),
-                    sort_order.into(),
-                    include_variants,
-                    limit,
+                    &PokemonQueryParams {
+                        min_bst,
+                        no_cache,
+                        sort_by: sort_by.map(SortField::from),
+                        sort_order: sort_order.into(),
+                        include_variants,
+                        limit,
+                    },
                 )
                 .await?;
             print_pokemon_list(&pokemon);
@@ -266,9 +270,7 @@ async fn main() -> anyhow::Result<()> {
                     version_group: game,
                 }
             } else if let Some(pokedex_name) = pokedex {
-                TeamSource::Pokedex {
-                    pokedex_name,
-                }
+                TeamSource::Pokedex { pokedex_name }
             } else if let Some(names) = pokemon {
                 TeamSource::Custom {
                     pokemon_names: names,

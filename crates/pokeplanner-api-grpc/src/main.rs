@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use pokeplanner_core::{
-    AppError, SortField, SortOrder, TeamPlanRequest, TeamSource,
+    AppError, PokemonQueryParams, SortField, SortOrder, TeamPlanRequest, TeamSource,
 };
 use pokeplanner_pokeapi::PokeApiHttpClient;
 use pokeplanner_service::PokePlannerService;
@@ -197,12 +197,14 @@ impl GrpcService for GrpcHandler {
             .service
             .get_game_pokemon(
                 &inner.version_group,
-                inner.min_bst,
-                inner.no_cache,
-                Self::proto_sort_field(inner.sort_by),
-                Self::proto_sort_order(inner.sort_order),
-                inner.include_variants,
-                inner.limit.map(|l| l as usize),
+                &PokemonQueryParams {
+                    min_bst: inner.min_bst,
+                    no_cache: inner.no_cache,
+                    sort_by: Self::proto_sort_field(inner.sort_by),
+                    sort_order: Self::proto_sort_order(inner.sort_order),
+                    include_variants: inner.include_variants,
+                    limit: inner.limit.map(|l| l as usize),
+                },
             )
             .await
             .map_err(Self::app_error_to_status)?;
@@ -220,12 +222,14 @@ impl GrpcService for GrpcHandler {
             .service
             .get_pokedex_pokemon(
                 &inner.pokedex_name,
-                inner.min_bst,
-                inner.no_cache,
-                Self::proto_sort_field(inner.sort_by),
-                Self::proto_sort_order(inner.sort_order),
-                inner.include_variants,
-                inner.limit.map(|l| l as usize),
+                &PokemonQueryParams {
+                    min_bst: inner.min_bst,
+                    no_cache: inner.no_cache,
+                    sort_by: Self::proto_sort_field(inner.sort_by),
+                    sort_order: Self::proto_sort_order(inner.sort_order),
+                    include_variants: inner.include_variants,
+                    limit: inner.limit.map(|l| l as usize),
+                },
             )
             .await
             .map_err(Self::app_error_to_status)?;
@@ -256,12 +260,10 @@ impl GrpcService for GrpcHandler {
         let inner = req.into_inner();
         let source = match inner.source {
             Some(team_source) => match team_source.source {
-                Some(team_source::Source::Game(vg)) => TeamSource::Game {
-                    version_group: vg,
-                },
-                Some(team_source::Source::Pokedex(name)) => TeamSource::Pokedex {
-                    pokedex_name: name,
-                },
+                Some(team_source::Source::Game(vg)) => TeamSource::Game { version_group: vg },
+                Some(team_source::Source::Pokedex(name)) => {
+                    TeamSource::Pokedex { pokedex_name: name }
+                }
                 Some(team_source::Source::Custom(list)) => TeamSource::Custom {
                     pokemon_names: list.pokemon_names,
                 },
@@ -297,9 +299,7 @@ impl GrpcService for GrpcHandler {
     ) -> Result<Response<AnalyzeTeamResponse>, Status> {
         let inner = req.into_inner();
         if inner.pokemon_names.is_empty() {
-            return Err(Status::invalid_argument(
-                "pokemon_names must not be empty",
-            ));
+            return Err(Status::invalid_argument("pokemon_names must not be empty"));
         }
         let coverage = self
             .service

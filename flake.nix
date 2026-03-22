@@ -24,10 +24,14 @@
         devShells.default = pkgs.mkShell {
           buildInputs = [
             rustToolchain
-            pkgs.protobuf     # protoc for tonic-build
-            pkgs.buf          # buf CLI for proto management
+            pkgs.protobuf      # protoc for tonic-build
+            pkgs.buf           # buf CLI for proto management
             pkgs.pkg-config
             pkgs.openssl
+            pkgs.cargo-audit   # security audit for dependencies
+            pkgs.cargo-binstall # install cargo binaries from pre-built sources
+            pkgs.act           # run GitHub Actions locally
+            pkgs.actionlint    # lint GitHub Actions workflows
           ];
 
           PROTOC = "${pkgs.protobuf}/bin/protoc";

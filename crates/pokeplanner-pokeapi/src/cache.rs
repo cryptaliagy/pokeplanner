@@ -104,7 +104,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let cache = DiskCache::new(dir.path().to_path_buf()).await.unwrap();
 
-        cache.set("pokemon", "pikachu", &"yellow mouse").await.unwrap();
+        cache
+            .set("pokemon", "pikachu", &"yellow mouse")
+            .await
+            .unwrap();
         let result: Option<String> = cache.get("pokemon", "pikachu", false).await;
         assert_eq!(result, Some("yellow mouse".to_string()));
     }
@@ -135,7 +138,9 @@ mod tests {
 
         // Write corrupt data
         let path = cache.cache_path("pokemon", "bad");
-        tokio::fs::create_dir_all(path.parent().unwrap()).await.unwrap();
+        tokio::fs::create_dir_all(path.parent().unwrap())
+            .await
+            .unwrap();
         tokio::fs::write(&path, b"not json").await.unwrap();
 
         let result: Option<String> = cache.get("pokemon", "bad", false).await;
