@@ -1,3 +1,5 @@
+mod unusable;
+
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -10,6 +12,7 @@ use pokeplanner_pokeapi::{PokeApiClientConfig, PokeApiHttpClient};
 use pokeplanner_service::PokePlannerService;
 use pokeplanner_storage::JsonFileStorage;
 use tracing_subscriber::EnvFilter;
+use unusable::UnusableStore;
 
 fn default_data_dir() -> PathBuf {
     dirs::home_dir()
@@ -130,6 +133,31 @@ enum Commands {
         #[command(subcommand)]
         action: CacheAction,
     },
+    /// Manage unusable pokemon (excluded from team planning)
+    Unusable {
+        #[command(subcommand)]
+        action: UnusableAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum UnusableAction {
+    /// Mark pokemon as unusable (comma-separated form names)
+    Add {
+        /// Pokemon form names (e.g., "charizard-mega-x", "mewtwo-mega-y")
+        #[arg(value_delimiter = ',')]
+        names: Vec<String>,
+    },
+    /// Unmark pokemon as unusable (comma-separated form names)
+    Remove {
+        /// Pokemon form names to unmark
+        #[arg(value_delimiter = ',')]
+        names: Vec<String>,
+    },
+    /// List all pokemon marked as unusable
+    List,
+    /// Clear the entire unusable list
+    Clear,
 }
 
 #[derive(Subcommand)]
@@ -255,10 +283,12 @@ async fn main() -> anyhow::Result<()> {
 
     let cli = Cli::parse();
     let cache_dir = cli.cache_dir;
+    let base_dir = default_data_dir();
 
     let storage = Arc::new(JsonFileStorage::new(cli.data_dir).await?);
     let pokeapi = Arc::new(PokeApiHttpClient::new(cache_dir.clone()).await?);
     let service = PokePlannerService::new(storage, pokeapi);
+    let mut unusable = UnusableStore::load(&base_dir).await?;
 
     match cli.command {
         Commands::ListGames { no_cache } => {
@@ -294,7 +324,7 @@ async fn main() -> anyhow::Result<()> {
                     },
                 )
                 .await?;
-            print_pokemon_list(&pokemon);
+            print_pokemon_list(&pokemon, &unusable);
         }
         Commands::PokedexPokemon {
             pokedex,
@@ -318,11 +348,11 @@ async fn main() -> anyhow::Result<()> {
                     },
                 )
                 .await?;
-            print_pokemon_list(&pokemon);
+            print_pokemon_list(&pokemon, &unusable);
         }
         Commands::Pokemon { name, no_cache } => {
             let pokemon = service.get_pokemon(&name, no_cache).await?;
-            print_pokemon_detail(&pokemon);
+            print_pokemon_detail(&pokemon, &unusable);
 
             // Show other forms/varieties of this species
             let varieties = service
@@ -339,7 +369,7 @@ async fn main() -> anyhow::Result<()> {
                     format!("({} total)", varieties.len()).dimmed(),
                 );
                 for v in &others {
-                    print_pokemon_detail(v);
+                    print_pokemon_detail(v, &unusable);
                 }
             }
         }
@@ -370,13 +400,17 @@ async fn main() -> anyhow::Result<()> {
                 anyhow::bail!("Specify either --game, --pokedex, or --pokemon");
             };
 
+            // Merge the persistent unusable list into the exclude list
+            let mut all_exclude = exclude.unwrap_or_default();
+            all_exclude.extend(unusable.to_exclude_list());
+
             let request = TeamPlanRequest {
                 source,
                 min_bst,
                 no_cache,
                 top_k: Some(top_k),
                 include_variants: !exclude_variants,
-                exclude: exclude.unwrap_or_default(),
+                exclude: all_exclude,
                 exclude_species: exclude_species.unwrap_or_default(),
                 exclude_variant_types: exclude_variant_type.unwrap_or_default(),
                 counter_team: counter,
@@ -425,6 +459,9 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Cache { action } => {
             handle_cache_action(action, &cache_dir).await?;
+        }
+        Commands::Unusable { action } => {
+            handle_unusable_action(action, &mut unusable).await?;
         }
     }
 
@@ -667,6 +704,65 @@ async fn populate_pokedex_pokemon(
     Ok(())
 }
 
+async fn handle_unusable_action(
+    action: UnusableAction,
+    store: &mut UnusableStore,
+) -> anyhow::Result<()> {
+    match action {
+        UnusableAction::Add { names } => {
+            if names.is_empty() {
+                anyhow::bail!("Provide at least one pokemon form name");
+            }
+            let added = store.add(&names).await?;
+            if added.is_empty() {
+                println!("All specified pokemon were already marked unusable.");
+            } else {
+                for name in &added {
+                    println!("  {} {}", "+".green(), name);
+                }
+                println!("Marked {} pokemon as unusable.", added.len());
+            }
+        }
+        UnusableAction::Remove { names } => {
+            if names.is_empty() {
+                anyhow::bail!("Provide at least one pokemon form name");
+            }
+            let removed = store.remove(&names).await?;
+            if removed.is_empty() {
+                println!("None of the specified pokemon were in the unusable list.");
+            } else {
+                for name in &removed {
+                    println!("  {} {}", "-".red(), name);
+                }
+                println!("Removed {} pokemon from unusable list.", removed.len());
+            }
+        }
+        UnusableAction::List => {
+            let list = store.list();
+            if list.is_empty() {
+                println!("No pokemon marked as unusable.");
+            } else {
+                println!(
+                    "{}",
+                    format!("{} pokemon marked as unusable:", list.len()).bold()
+                );
+                for name in &list {
+                    println!("  {}", name);
+                }
+            }
+        }
+        UnusableAction::Clear => {
+            let count = store.clear().await?;
+            if count > 0 {
+                println!("Cleared {} pokemon from unusable list.", count);
+            } else {
+                println!("Unusable list was already empty.");
+            }
+        }
+    }
+    Ok(())
+}
+
 fn format_bytes(bytes: u64) -> String {
     if bytes < 1024 {
         format!("{bytes} B")
@@ -762,39 +858,43 @@ fn stat_bar(value: u32, max: u32, width: usize) -> String {
     format!("{colored_filled}{}", empty_str.dimmed())
 }
 
-fn print_pokemon_list(pokemon: &[pokeplanner_core::Pokemon]) {
+fn print_pokemon_list(pokemon: &[pokeplanner_core::Pokemon], unusable: &UnusableStore) {
     println!("{}", format!("{} pokemon found:", pokemon.len()).bold());
     println!();
     for p in pokemon {
         let types_display: Vec<String> =
             p.types.iter().map(|t| format!("{}", color_type(t))).collect();
-        let variant_marker = if !p.is_default_form {
-            " *".dimmed().to_string()
-        } else {
-            String::new()
-        };
+        let mut markers = String::new();
+        if !p.is_default_form {
+            markers.push_str(&" *".dimmed().to_string());
+        }
+        if unusable.is_unusable(&p.form_name) {
+            markers.push_str(&" [unusable]".red().to_string());
+        }
         println!(
             "  #{:>4} {:<25} {:<20} BST: {}{}",
             p.pokedex_number.to_string().dimmed(),
             p.form_name,
             types_display.join("/"),
             p.bst().to_string().bold(),
-            variant_marker,
+            markers,
         );
     }
 }
 
-fn print_pokemon_detail(p: &pokeplanner_core::Pokemon) {
+fn print_pokemon_detail(p: &pokeplanner_core::Pokemon, unusable: &UnusableStore) {
     let types_display: Vec<String> =
         p.types.iter().map(|t| format!("{}", color_type(t))).collect();
-    let variant = if !p.is_default_form {
-        " (variant)".dimmed().to_string()
-    } else {
-        String::new()
-    };
+    let mut tags = String::new();
+    if !p.is_default_form {
+        tags.push_str(&" (variant)".dimmed().to_string());
+    }
+    if unusable.is_unusable(&p.form_name) {
+        tags.push_str(&" (unusable — excluded from team planning)".red().to_string());
+    }
 
     println!();
-    println!("  {} {}", p.form_name.bold(), variant);
+    println!("  {} {}", p.form_name.bold(), tags);
     println!(
         "  #{} {}",
         p.pokedex_number,

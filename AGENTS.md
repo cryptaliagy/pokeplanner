@@ -145,6 +145,10 @@ Jobs are submitted, assigned a UUID, and processed asynchronously via `tokio::sp
 | `cache clear pokedex <name>` | Remove cached data for a pokedex |
 | `cache clear pokemon <name>` | Remove cached data for a pokemon |
 | `cache clear type-chart` | Remove the cached type chart |
+| `unusable add <names>` | Mark pokemon as unusable (comma-separated form names) |
+| `unusable remove <names>` | Unmark pokemon as unusable |
+| `unusable list` | List all pokemon marked as unusable |
+| `unusable clear` | Clear the entire unusable list |
 
 ## Testing
 
