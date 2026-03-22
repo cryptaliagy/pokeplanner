@@ -11,6 +11,7 @@ path = "src/main.rs"
 pokeplanner-core = { workspace = true }
 pokeplanner-storage = { workspace = true }
 pokeplanner-service = { workspace = true }
+pokeplanner-pokeapi = { workspace = true }
 tonic = { workspace = true }
 prost = { workspace = true }
 tokio = { workspace = true }

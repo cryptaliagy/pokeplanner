@@ -17,6 +17,11 @@
 | **chrono** | 0.4 | Date/time handling | Full-featured datetime library with serde and timezone support |
 | **tracing** | 0.1 | Structured logging | Async-aware, structured, composable instrumentation |
 | **tracing-subscriber** | 0.3 | Log output | Configurable subscribers with env-filter for log levels |
+| **reqwest** | 0.12 | HTTP client | De facto async HTTP client for Rust; used for PokeAPI requests with JSON deserialization |
+| **governor** | 0.8 | Rate limiting | Token-bucket rate limiter for client-side outbound request throttling; prevents PokeAPI hammering |
+| **futures** | 0.3 | Async utilities | `stream::BufferedUnordered` for concurrent pokemon fetching with bounded concurrency |
+| **tower** | 0.5 | HTTP middleware | Shared middleware ecosystem between axum and tonic |
+
 ## Build Dependencies
 
 | Dependency | Version | Purpose |
@@ -29,4 +34,6 @@
 - **Tonic for gRPC**: Tonic is the only mature gRPC framework in Rust and integrates seamlessly with the tokio ecosystem.
 - **thiserror + anyhow**: `thiserror` for library crates (strongly typed errors), `anyhow` for the CLI binary (ergonomic error propagation).
 - **Trait-based storage**: The `Storage` trait in `pokeplanner-storage` is designed to be implementation-agnostic. JSON file storage is the current implementation, but the interface supports future migration to SQL (e.g., sqlx) or NoSQL (e.g., MongoDB) without changing the service layer.
-- **Native async traits over async-trait**: The `Storage` trait uses native `impl Future` return types (Rust 1.75+) with explicit `+ Send` bounds instead of the `async-trait` crate. Combined with generics on `PokePlannerService<S: Storage>`, this avoids heap-allocated boxed futures and eliminates the `async-trait` dependency.
+- **Native async traits over async-trait**: Both the `Storage` trait and `PokeApiClient` trait use native `impl Future` return types (Rust 1.75+) with explicit `+ Send` bounds instead of the `async-trait` crate. Combined with generics on `PokePlannerService<S: Storage, P: PokeApiClient>`, this avoids heap-allocated boxed futures.
+- **reqwest over hyper directly**: reqwest provides a high-level API with JSON deserialization, connection pooling, and TLS out of the box. PokeAPI integration doesn't need low-level HTTP control.
+- **governor over tower rate limiting**: Tower's rate limiting is designed for incoming request middleware. Governor provides client-side outgoing rate limiting with a clean async API (token-bucket algorithm), which is exactly what's needed for PokeAPI fair use compliance. Default rate is 20 req/s with burst of 5 — conservative for a free, no-auth API behind Cloudflare. Configurable via `PokeApiClientConfig`.
