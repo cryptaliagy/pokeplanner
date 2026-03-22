@@ -199,6 +199,7 @@ message PlanTeamRequest {
   repeated string counter_team = 6;
   repeated string exclude = 7;
   repeated string exclude_species = 8;
+  repeated string exclude_variant_types = 9;
 }
 
 message PlanTeamResponse {

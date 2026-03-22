@@ -104,6 +104,9 @@ enum Commands {
         /// Exclude alternate forms (megas, regional variants, etc.)
         #[arg(long)]
         exclude_variants: bool,
+        /// Exclude variants by type keyword (e.g., "mega", "gmax", "alola", "galar", "hisui", "totem")
+        #[arg(long, value_delimiter = ',')]
+        exclude_variant_type: Option<Vec<String>>,
         /// Exclude specific pokemon by form name (comma-separated)
         #[arg(long, value_delimiter = ',')]
         exclude: Option<Vec<String>>,
@@ -271,6 +274,7 @@ async fn main() -> anyhow::Result<()> {
             top_k,
             no_cache,
             exclude_variants,
+            exclude_variant_type,
             exclude,
             exclude_species,
             counter,
@@ -297,6 +301,7 @@ async fn main() -> anyhow::Result<()> {
                 include_variants: !exclude_variants,
                 exclude: exclude.unwrap_or_default(),
                 exclude_species: exclude_species.unwrap_or_default(),
+                exclude_variant_types: exclude_variant_type.unwrap_or_default(),
                 counter_team: counter,
             };
 

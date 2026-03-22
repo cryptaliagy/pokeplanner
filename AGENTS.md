@@ -131,7 +131,7 @@ Jobs are submitted, assigned a UUID, and processed asynchronously via `tokio::sp
 | `game-pokemon <game>` | List pokemon for a game (`--min-bst`, `--sort-by`, `--sort-order`, `--include-variants`) |
 | `pokedex-pokemon <pokedex>` | List pokemon from a pokedex (`--min-bst`, `--sort-by`, `--sort-order`) |
 | `pokemon <name>` | Get pokemon details (colored stat bars, types) |
-| `plan-team` | Plan optimal team (`--game` (CSV) or `--pokedex` or `--pokemon`, `--min-bst`, `--top-k`) |
+| `plan-team` | Plan optimal team (`--game` (CSV) or `--pokedex` or `--pokemon`, `--min-bst`, `--top-k`, `--exclude-variant-type`) |
 | `analyze-team <names>` | Analyze type coverage |
 
 ## Testing

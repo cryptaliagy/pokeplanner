@@ -54,7 +54,7 @@ The job system supports long-running operations:
 
 1. User selects a source: game (version-group), pokedex, or custom pokemon list
 2. Service fetches candidate pokemon via PokeAPI (cached aggressively, 1-year TTL)
-3. Optional BST filter reduces candidates
+3. Filters reduce candidates: min BST, exclude by form/species, exclude variant types (e.g., mega, gmax, alola)
 4. **Hybrid algorithm** selects optimal teams:
    - N ≤ 25: exact brute-force (provably optimal)
    - N > 25: greedy beam search (beam width 50, high-quality heuristic)
