@@ -21,6 +21,12 @@ pub struct TeamPlanRequest {
     pub top_k: Option<usize>,
     #[serde(default = "default_include_variants")]
     pub include_variants: bool,
+    /// Specific pokemon form names to exclude from candidates.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exclude: Vec<String>,
+    /// Species names to exclude (removes all forms/variants of that species).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exclude_species: Vec<String>,
     /// Enemy pokemon names to counter-team against. When set, the planner
     /// optimizes for coverage against this specific team rather than general coverage.
     #[serde(default, skip_serializing_if = "Option::is_none")]

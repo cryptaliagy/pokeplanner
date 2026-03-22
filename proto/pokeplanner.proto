@@ -197,6 +197,8 @@ message PlanTeamRequest {
   optional uint32 top_k = 4;
   bool include_variants = 5;
   repeated string counter_team = 6;
+  repeated string exclude = 7;
+  repeated string exclude_species = 8;
 }
 
 message PlanTeamResponse {

@@ -281,6 +281,8 @@ impl GrpcService for GrpcHandler {
             no_cache: inner.no_cache,
             top_k: inner.top_k.map(|k| k as usize),
             include_variants: inner.include_variants,
+            exclude: inner.exclude,
+            exclude_species: inner.exclude_species,
             counter_team: if inner.counter_team.is_empty() {
                 None
             } else {

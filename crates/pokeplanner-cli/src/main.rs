@@ -104,6 +104,12 @@ enum Commands {
         /// Exclude alternate forms (megas, regional variants, etc.)
         #[arg(long)]
         exclude_variants: bool,
+        /// Exclude specific pokemon by form name (comma-separated)
+        #[arg(long, value_delimiter = ',')]
+        exclude: Option<Vec<String>>,
+        /// Exclude all forms of a species (comma-separated, e.g., "charizard" removes base + megas)
+        #[arg(long, value_delimiter = ',')]
+        exclude_species: Option<Vec<String>>,
         /// Enemy pokemon to counter (comma-separated). Optimizes team against this specific team.
         #[arg(long, value_delimiter = ',')]
         counter: Option<Vec<String>>,
@@ -265,6 +271,8 @@ async fn main() -> anyhow::Result<()> {
             top_k,
             no_cache,
             exclude_variants,
+            exclude,
+            exclude_species,
             counter,
         } => {
             let source = if let Some(games) = game {
@@ -287,6 +295,8 @@ async fn main() -> anyhow::Result<()> {
                 no_cache,
                 top_k: Some(top_k),
                 include_variants: !exclude_variants,
+                exclude: exclude.unwrap_or_default(),
+                exclude_species: exclude_species.unwrap_or_default(),
                 counter_team: counter,
             };
 

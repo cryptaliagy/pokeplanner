@@ -253,10 +253,16 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
         job.updated_at = Utc::now();
         let _ = storage.update_job(&job).await;
 
-        // Step 2: Apply BST filter
+        // Step 2: Apply filters
         let mut filtered = candidates;
         if let Some(min_bst) = request.min_bst {
             filtered.retain(|p| p.bst() >= min_bst);
+        }
+        if !request.exclude.is_empty() {
+            filtered.retain(|p| !request.exclude.iter().any(|e| e == &p.form_name));
+        }
+        if !request.exclude_species.is_empty() {
+            filtered.retain(|p| !request.exclude_species.iter().any(|e| e == &p.species_name));
         }
 
         if filtered.is_empty() {
