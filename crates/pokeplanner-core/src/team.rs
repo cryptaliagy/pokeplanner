@@ -5,7 +5,7 @@ use crate::model::{Pokemon, PokemonType};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum TeamSource {
-    Game { version_group: String },
+    Game { version_groups: Vec<String> },
     Pokedex { pokedex_name: String },
     Custom { pokemon_names: Vec<String> },
 }
@@ -21,6 +21,12 @@ pub struct TeamPlanRequest {
     pub top_k: Option<usize>,
     #[serde(default = "default_include_variants")]
     pub include_variants: bool,
+    /// Specific pokemon form names to exclude from candidates.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exclude: Vec<String>,
+    /// Species names to exclude (removes all forms/variants of that species).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exclude_species: Vec<String>,
     /// Enemy pokemon names to counter-team against. When set, the planner
     /// optimizes for coverage against this specific team rather than general coverage.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -32,8 +38,15 @@ fn default_include_variants() -> bool {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TeamMember {
+    pub pokemon: Pokemon,
+    pub weaknesses_2x: Vec<PokemonType>,
+    pub weaknesses_4x: Vec<PokemonType>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TeamPlan {
-    pub team: Vec<Pokemon>,
+    pub team: Vec<TeamMember>,
     pub total_bst: u32,
     pub type_coverage: TypeCoverage,
     pub score: f64,
@@ -63,15 +76,22 @@ pub enum SortField {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum SortOrder {
+    #[default]
     Asc,
     Desc,
 }
 
-impl Default for SortOrder {
-    fn default() -> Self {
-        SortOrder::Asc
-    }
+/// Common parameters for querying and filtering pokemon lists.
+#[derive(Debug, Clone, Default)]
+pub struct PokemonQueryParams {
+    pub min_bst: Option<u32>,
+    pub no_cache: bool,
+    pub sort_by: Option<SortField>,
+    pub sort_order: SortOrder,
+    pub include_variants: bool,
+    pub limit: Option<usize>,
 }
 
 #[cfg(test)]
@@ -81,12 +101,29 @@ mod tests {
     #[test]
     fn test_team_source_game_serde() {
         let source = TeamSource::Game {
-            version_group: "scarlet-violet".to_string(),
+            version_groups: vec!["scarlet-violet".to_string()],
         };
         let json = serde_json::to_string(&source).unwrap();
         let deserialized: TeamSource = serde_json::from_str(&json).unwrap();
         match deserialized {
-            TeamSource::Game { version_group } => assert_eq!(version_group, "scarlet-violet"),
+            TeamSource::Game { version_groups } => {
+                assert_eq!(version_groups, vec!["scarlet-violet"])
+            }
+            _ => panic!("expected Game variant"),
+        }
+    }
+
+    #[test]
+    fn test_team_source_multi_game_serde() {
+        let source = TeamSource::Game {
+            version_groups: vec!["red-blue".to_string(), "gold-silver".to_string()],
+        };
+        let json = serde_json::to_string(&source).unwrap();
+        let deserialized: TeamSource = serde_json::from_str(&json).unwrap();
+        match deserialized {
+            TeamSource::Game { version_groups } => {
+                assert_eq!(version_groups, vec!["red-blue", "gold-silver"])
+            }
             _ => panic!("expected Game variant"),
         }
     }
@@ -108,7 +145,7 @@ mod tests {
 
     #[test]
     fn test_team_plan_request_defaults() {
-        let json = r#"{"source":{"game":{"version_group":"red-blue"}}}"#;
+        let json = r#"{"source":{"game":{"version_groups":["red-blue"]}}}"#;
         let req: TeamPlanRequest = serde_json::from_str(json).unwrap();
         assert!(req.min_bst.is_none());
         assert!(!req.no_cache);

@@ -176,10 +176,14 @@ message GetPokemonResponse {
 
 message TeamSource {
   oneof source {
-    string game = 1;
+    GameList games = 1;
     string pokedex = 2;
     CustomPokemonList custom = 3;
   }
+}
+
+message GameList {
+  repeated string version_groups = 1;
 }
 
 message CustomPokemonList {
@@ -193,6 +197,8 @@ message PlanTeamRequest {
   optional uint32 top_k = 4;
   bool include_variants = 5;
   repeated string counter_team = 6;
+  repeated string exclude = 7;
+  repeated string exclude_species = 8;
 }
 
 message PlanTeamResponse {

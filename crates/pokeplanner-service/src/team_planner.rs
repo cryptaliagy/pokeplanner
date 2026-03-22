@@ -1,4 +1,4 @@
-use pokeplanner_core::{Pokemon, PokemonType, TeamPlan, TypeCoverage};
+use pokeplanner_core::{Pokemon, PokemonType, TeamMember, TeamPlan, TypeCoverage};
 
 use crate::type_chart::TypeChart;
 
@@ -65,11 +65,7 @@ impl<'a> TeamPlanner<'a> {
     fn plan_exact(&self, candidates: &[Pokemon], top_k: usize) -> Vec<TeamPlan> {
         let mut best: Vec<(f64, Vec<usize>)> = Vec::new();
         let n = candidates.len();
-        let mut indices = [0usize; TEAM_SIZE];
-
-        for i in 0..TEAM_SIZE {
-            indices[i] = i;
-        }
+        let mut indices: [usize; TEAM_SIZE] = std::array::from_fn(|i| i);
 
         loop {
             let team: Vec<&Pokemon> = indices.iter().map(|&i| &candidates[i]).collect();
@@ -119,8 +115,7 @@ impl<'a> TeamPlanner<'a> {
                 }
             }
 
-            next_beam
-                .sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+            next_beam.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
             next_beam.truncate(BEAM_WIDTH);
             beam = next_beam;
 
@@ -139,8 +134,7 @@ impl<'a> TeamPlanner<'a> {
     }
 
     fn score_team_refs(&self, team: &[&Pokemon]) -> f64 {
-        let team_types: Vec<Vec<PokemonType>> =
-            team.iter().map(|p| p.types.clone()).collect();
+        let team_types: Vec<Vec<PokemonType>> = team.iter().map(|p| p.types.clone()).collect();
 
         let (offensive, defensive) = match &self.counter {
             Some(ct) => (
@@ -162,8 +156,7 @@ impl<'a> TeamPlanner<'a> {
     }
 
     fn build_team_plan(&self, team: &[Pokemon]) -> TeamPlan {
-        let team_types: Vec<Vec<PokemonType>> =
-            team.iter().map(|p| p.types.clone()).collect();
+        let team_types: Vec<Vec<PokemonType>> = team.iter().map(|p| p.types.clone()).collect();
 
         let (offensive_score, defensive_score) = match &self.counter {
             Some(ct) => (
@@ -239,8 +232,9 @@ impl<'a> TeamPlanner<'a> {
         let uncovered_types = match &self.counter {
             Some(ct) => {
                 // Types of enemy pokemon we can't hit SE
-                let uncovered_indices =
-                    self.type_chart.uncovered_enemies(&team_types, &ct.enemy_types);
+                let uncovered_indices = self
+                    .type_chart
+                    .uncovered_enemies(&team_types, &ct.enemy_types);
                 uncovered_indices
                     .iter()
                     .flat_map(|&i| ct.enemy_types[i].iter().copied())
@@ -251,8 +245,20 @@ impl<'a> TeamPlanner<'a> {
             None => self.type_chart.uncovered_types(&team_types),
         };
 
+        let members = team
+            .iter()
+            .map(|p| {
+                let (w2x, w4x) = self.type_chart.pokemon_weaknesses(&p.types);
+                TeamMember {
+                    pokemon: p.clone(),
+                    weaknesses_2x: w2x,
+                    weaknesses_4x: w4x,
+                }
+            })
+            .collect();
+
         TeamPlan {
-            team: team.to_vec(),
+            team: members,
             total_bst,
             type_coverage: TypeCoverage {
                 offensive_coverage,
@@ -399,13 +405,7 @@ mod tests {
         let planner = TeamPlanner::new(&chart);
 
         let candidates: Vec<Pokemon> = (0..10)
-            .map(|i| {
-                make_pokemon(
-                    &format!("mon_{i}"),
-                    vec![PokemonType::ALL[i % 18]],
-                    500,
-                )
-            })
+            .map(|i| make_pokemon(&format!("mon_{i}"), vec![PokemonType::ALL[i % 18]], 500))
             .collect();
 
         let results = planner.plan_teams(&candidates, 1);
@@ -492,10 +492,14 @@ mod tests {
         );
 
         // Counter team should include Grass and/or Electric types
-        let has_se_type = counter_result[0].team.iter().any(|p| {
-            p.types.contains(&Grass) || p.types.contains(&Electric)
-        });
-        assert!(has_se_type, "Counter team should include types SE against Water");
+        let has_se_type = counter_result[0]
+            .team
+            .iter()
+            .any(|m| m.pokemon.types.contains(&Grass) || m.pokemon.types.contains(&Electric));
+        assert!(
+            has_se_type,
+            "Counter team should include types SE against Water"
+        );
     }
 
     #[test]

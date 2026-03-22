@@ -7,7 +7,9 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use pokeplanner_core::{AppError, HealthResponse, SortField, SortOrder, TeamPlanRequest};
+use pokeplanner_core::{
+    AppError, HealthResponse, PokemonQueryParams, SortField, SortOrder, TeamPlanRequest,
+};
 use pokeplanner_service::PokePlannerService;
 use serde::Deserialize;
 use serde_json::json;
@@ -26,10 +28,7 @@ pub fn create_router<S: pokeplanner_storage::Storage, P: pokeplanner_pokeapi::Po
             "/version-groups/{name}/pokemon",
             get(get_game_pokemon::<S, P>),
         )
-        .route(
-            "/pokedex/{name}/pokemon",
-            get(get_pokedex_pokemon::<S, P>),
-        )
+        .route("/pokedex/{name}/pokemon", get(get_pokedex_pokemon::<S, P>))
         .route("/pokemon/{name}", get(get_pokemon::<S, P>))
         .route("/teams/plan", post(plan_team::<S, P>))
         .route("/teams/analyze", post(analyze_team::<S, P>))
@@ -121,16 +120,21 @@ async fn get_game_pokemon<
     match service
         .get_game_pokemon(
             &name,
-            params.min_bst,
-            params.no_cache.unwrap_or(false),
-            params.sort_by,
-            params.sort_order.unwrap_or_default(),
-            params.include_variants.unwrap_or(true),
-            params.limit,
+            &PokemonQueryParams {
+                min_bst: params.min_bst,
+                no_cache: params.no_cache.unwrap_or(false),
+                sort_by: params.sort_by,
+                sort_order: params.sort_order.unwrap_or_default(),
+                include_variants: params.include_variants.unwrap_or(true),
+                limit: params.limit,
+            },
         )
         .await
     {
-        Ok(pokemon) => (StatusCode::OK, Json(json!({ "pokemon": pokemon, "count": pokemon.len() }))),
+        Ok(pokemon) => (
+            StatusCode::OK,
+            Json(json!({ "pokemon": pokemon, "count": pokemon.len() })),
+        ),
         Err(e) => error_response(e),
     }
 }
@@ -146,12 +150,14 @@ async fn get_pokedex_pokemon<
     match service
         .get_pokedex_pokemon(
             &name,
-            params.min_bst,
-            params.no_cache.unwrap_or(false),
-            params.sort_by,
-            params.sort_order.unwrap_or_default(),
-            params.include_variants.unwrap_or(true),
-            params.limit,
+            &PokemonQueryParams {
+                min_bst: params.min_bst,
+                no_cache: params.no_cache.unwrap_or(false),
+                sort_by: params.sort_by,
+                sort_order: params.sort_order.unwrap_or_default(),
+                include_variants: params.include_variants.unwrap_or(true),
+                limit: params.limit,
+            },
         )
         .await
     {
@@ -209,9 +215,7 @@ async fn analyze_team<S: pokeplanner_storage::Storage, P: pokeplanner_pokeapi::P
 
 fn error_response(e: AppError) -> (StatusCode, Json<serde_json::Value>) {
     let (status, msg) = match &e {
-        AppError::NotFound(_) | AppError::JobNotFound(_) => {
-            (StatusCode::NOT_FOUND, e.to_string())
-        }
+        AppError::NotFound(_) | AppError::JobNotFound(_) => (StatusCode::NOT_FOUND, e.to_string()),
         _ => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
     };
     (status, Json(json!({ "error": msg })))
@@ -254,7 +258,14 @@ mod tests {
                 form_name: name.to_string(),
                 pokedex_number: 1,
                 types: vec![PokemonType::Normal],
-                stats: BaseStats { hp: 50, attack: 50, defense: 50, special_attack: 50, special_defense: 50, speed: 50 },
+                stats: BaseStats {
+                    hp: 50,
+                    attack: 50,
+                    defense: 50,
+                    special_attack: 50,
+                    special_defense: 50,
+                    speed: 50,
+                },
                 is_default_form: true,
             })
         }
@@ -273,10 +284,7 @@ mod tests {
         ) -> Result<Vec<Pokemon>, AppError> {
             Ok(vec![])
         }
-        async fn get_type_chart(
-            &self,
-            _no_cache: bool,
-        ) -> Result<TypeEffectivenessData, AppError> {
+        async fn get_type_chart(&self, _no_cache: bool) -> Result<TypeEffectivenessData, AppError> {
             Ok(TypeEffectivenessData { entries: vec![] })
         }
     }
@@ -337,11 +345,7 @@ mod tests {
     async fn test_version_groups_endpoint() {
         let app = make_app().await;
         let resp = app
-            .oneshot(
-                Request::get("/version-groups")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
+            .oneshot(Request::get("/version-groups").body(Body::empty()).unwrap())
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);

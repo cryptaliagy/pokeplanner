@@ -73,7 +73,12 @@ pub struct BaseStats {
 
 impl BaseStats {
     pub fn total(&self) -> u32 {
-        self.hp + self.attack + self.defense + self.special_attack + self.special_defense + self.speed
+        self.hp
+            + self.attack
+            + self.defense
+            + self.special_attack
+            + self.special_defense
+            + self.speed
     }
 }
 
@@ -198,7 +203,10 @@ mod tests {
         let json = serde_json::to_string(&pokemon).unwrap();
         let deserialized: Pokemon = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.form_name, "charizard-mega-x");
-        assert_eq!(deserialized.types, vec![PokemonType::Fire, PokemonType::Dragon]);
+        assert_eq!(
+            deserialized.types,
+            vec![PokemonType::Fire, PokemonType::Dragon]
+        );
         assert!(!deserialized.is_default_form);
     }
 }

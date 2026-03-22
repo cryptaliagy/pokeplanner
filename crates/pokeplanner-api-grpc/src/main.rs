@@ -1,7 +1,9 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 
+use clap::Parser;
 use pokeplanner_core::{
-    AppError, SortField, SortOrder, TeamPlanRequest, TeamSource,
+    AppError, PokemonQueryParams, SortField, SortOrder, TeamPlanRequest, TeamSource,
 };
 use pokeplanner_pokeapi::PokeApiHttpClient;
 use pokeplanner_service::PokePlannerService;
@@ -197,12 +199,14 @@ impl GrpcService for GrpcHandler {
             .service
             .get_game_pokemon(
                 &inner.version_group,
-                inner.min_bst,
-                inner.no_cache,
-                Self::proto_sort_field(inner.sort_by),
-                Self::proto_sort_order(inner.sort_order),
-                inner.include_variants,
-                inner.limit.map(|l| l as usize),
+                &PokemonQueryParams {
+                    min_bst: inner.min_bst,
+                    no_cache: inner.no_cache,
+                    sort_by: Self::proto_sort_field(inner.sort_by),
+                    sort_order: Self::proto_sort_order(inner.sort_order),
+                    include_variants: inner.include_variants,
+                    limit: inner.limit.map(|l| l as usize),
+                },
             )
             .await
             .map_err(Self::app_error_to_status)?;
@@ -220,12 +224,14 @@ impl GrpcService for GrpcHandler {
             .service
             .get_pokedex_pokemon(
                 &inner.pokedex_name,
-                inner.min_bst,
-                inner.no_cache,
-                Self::proto_sort_field(inner.sort_by),
-                Self::proto_sort_order(inner.sort_order),
-                inner.include_variants,
-                inner.limit.map(|l| l as usize),
+                &PokemonQueryParams {
+                    min_bst: inner.min_bst,
+                    no_cache: inner.no_cache,
+                    sort_by: Self::proto_sort_field(inner.sort_by),
+                    sort_order: Self::proto_sort_order(inner.sort_order),
+                    include_variants: inner.include_variants,
+                    limit: inner.limit.map(|l| l as usize),
+                },
             )
             .await
             .map_err(Self::app_error_to_status)?;
@@ -256,12 +262,12 @@ impl GrpcService for GrpcHandler {
         let inner = req.into_inner();
         let source = match inner.source {
             Some(team_source) => match team_source.source {
-                Some(team_source::Source::Game(vg)) => TeamSource::Game {
-                    version_group: vg,
+                Some(team_source::Source::Games(list)) => TeamSource::Game {
+                    version_groups: list.version_groups,
                 },
-                Some(team_source::Source::Pokedex(name)) => TeamSource::Pokedex {
-                    pokedex_name: name,
-                },
+                Some(team_source::Source::Pokedex(name)) => {
+                    TeamSource::Pokedex { pokedex_name: name }
+                }
                 Some(team_source::Source::Custom(list)) => TeamSource::Custom {
                     pokemon_names: list.pokemon_names,
                 },
@@ -275,6 +281,8 @@ impl GrpcService for GrpcHandler {
             no_cache: inner.no_cache,
             top_k: inner.top_k.map(|k| k as usize),
             include_variants: inner.include_variants,
+            exclude: inner.exclude,
+            exclude_species: inner.exclude_species,
             counter_team: if inner.counter_team.is_empty() {
                 None
             } else {
@@ -297,9 +305,7 @@ impl GrpcService for GrpcHandler {
     ) -> Result<Response<AnalyzeTeamResponse>, Status> {
         let inner = req.into_inner();
         if inner.pokemon_names.is_empty() {
-            return Err(Status::invalid_argument(
-                "pokemon_names must not be empty",
-            ));
+            return Err(Status::invalid_argument("pokemon_names must not be empty"));
         }
         let coverage = self
             .service
@@ -312,26 +318,54 @@ impl GrpcService for GrpcHandler {
     }
 }
 
+fn default_data_dir() -> PathBuf {
+    dirs::home_dir()
+        .map(|h| h.join(".pokeplanner"))
+        .unwrap_or_else(|| PathBuf::from(".pokeplanner"))
+}
+
+#[derive(Parser)]
+#[command(name = "pokeplanner-grpc", about = "PokePlanner gRPC API server", version)]
+struct Cli {
+    /// Host address to bind to
+    #[arg(long, default_value = "0.0.0.0")]
+    host: String,
+
+    /// Port to listen on
+    #[arg(short, long, default_value_t = 50051)]
+    port: u16,
+
+    /// Directory for cached PokeAPI data
+    #[arg(long, default_value_os_t = default_data_dir().join("cache"))]
+    cache_dir: PathBuf,
+
+    /// Directory for job storage data
+    #[arg(long, default_value_os_t = default_data_dir().join("jobs"))]
+    data_dir: PathBuf,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .init();
 
+    let cli = Cli::parse();
+
     let storage = Arc::new(
-        JsonFileStorage::new("data/jobs".into())
+        JsonFileStorage::new(cli.data_dir)
             .await
             .expect("Failed to initialize storage"),
     );
     let pokeapi = Arc::new(
-        PokeApiHttpClient::new("data/cache".into())
+        PokeApiHttpClient::new(cli.cache_dir)
             .await
             .expect("Failed to initialize PokeAPI client"),
     );
     let service = Arc::new(PokePlannerService::new(storage, pokeapi));
 
     let handler = GrpcHandler { service };
-    let addr = "0.0.0.0:50051".parse()?;
+    let addr = format!("{}:{}", cli.host, cli.port).parse()?;
     tracing::info!("gRPC server listening on {addr}");
 
     Server::builder()

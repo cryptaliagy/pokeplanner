@@ -6,7 +6,8 @@ use std::sync::Arc;
 use chrono::Utc;
 use pokeplanner_core::{
     AppError, HealthResponse, Job, JobId, JobKind, JobProgress, JobResult, JobStatus, Pokemon,
-    PokemonType, SortField, SortOrder, TeamPlanRequest, TeamSource, TypeCoverage,
+    PokemonQueryParams, PokemonType, SortField, SortOrder, TeamPlanRequest, TeamSource,
+    TypeCoverage,
 };
 use pokeplanner_pokeapi::{PokeApiClient, VersionGroupInfo};
 use pokeplanner_storage::Storage;
@@ -95,52 +96,58 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
     pub async fn get_game_pokemon(
         &self,
         version_group: &str,
-        min_bst: Option<u32>,
-        no_cache: bool,
-        sort_by: Option<SortField>,
-        sort_order: SortOrder,
-        include_variants: bool,
-        limit: Option<usize>,
+        params: &PokemonQueryParams,
     ) -> Result<Vec<Pokemon>, AppError> {
         let pokemon = self
             .pokeapi
-            .get_game_pokemon(version_group, no_cache, include_variants)
+            .get_game_pokemon(version_group, params.no_cache, params.include_variants)
             .await?;
-        Ok(filter_sort_limit(pokemon, min_bst, sort_by, sort_order, limit))
+        Ok(filter_sort_limit(
+            pokemon,
+            params.min_bst,
+            params.sort_by,
+            params.sort_order,
+            params.limit,
+        ))
     }
 
     /// Get pokemon from a specific pokedex (e.g., "national" for all pokemon).
     pub async fn get_pokedex_pokemon(
         &self,
         pokedex_name: &str,
-        min_bst: Option<u32>,
-        no_cache: bool,
-        sort_by: Option<SortField>,
-        sort_order: SortOrder,
-        include_variants: bool,
-        limit: Option<usize>,
+        params: &PokemonQueryParams,
     ) -> Result<Vec<Pokemon>, AppError> {
         let pokemon = self
             .pokeapi
-            .get_pokedex_pokemon(pokedex_name, no_cache, include_variants)
+            .get_pokedex_pokemon(pokedex_name, params.no_cache, params.include_variants)
             .await?;
-        Ok(filter_sort_limit(pokemon, min_bst, sort_by, sort_order, limit))
+        Ok(filter_sort_limit(
+            pokemon,
+            params.min_bst,
+            params.sort_by,
+            params.sort_order,
+            params.limit,
+        ))
     }
 
     /// Get a single pokemon by name.
-    pub async fn get_pokemon(
-        &self,
-        name: &str,
-        no_cache: bool,
-    ) -> Result<Pokemon, AppError> {
+    pub async fn get_pokemon(&self, name: &str, no_cache: bool) -> Result<Pokemon, AppError> {
         self.pokeapi.get_pokemon(name, no_cache).await
     }
 
-    /// Submit a team planning job. Returns the job ID immediately.
-    pub async fn submit_team_plan(
+    /// Get all forms/varieties for a species (base, mega, regional, etc.).
+    pub async fn get_species_varieties(
         &self,
-        request: TeamPlanRequest,
-    ) -> Result<JobId, AppError> {
+        species_name: &str,
+        no_cache: bool,
+    ) -> Result<Vec<Pokemon>, AppError> {
+        self.pokeapi
+            .get_species_varieties(species_name, no_cache)
+            .await
+    }
+
+    /// Submit a team planning job. Returns the job ID immediately.
+    pub async fn submit_team_plan(&self, request: TeamPlanRequest) -> Result<JobId, AppError> {
         let job = Job::with_kind(JobKind::TeamPlan(request.clone()));
         let job_id = job.id;
         self.storage.save_job(&job).await?;
@@ -180,17 +187,33 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
 
         // Step 1: Fetch candidate pokemon
         let candidates = match &request.source {
-            TeamSource::Game { version_group } => {
-                match pokeapi
-                    .get_game_pokemon(version_group, request.no_cache, request.include_variants)
-                    .await
-                {
-                    Ok(pokemon) => pokemon,
-                    Err(e) => {
-                        Self::fail_job(&storage, &mut job, &format!("Failed to fetch game pokemon: {e}")).await;
-                        return;
+            TeamSource::Game { version_groups } => {
+                let mut all_pokemon = Vec::new();
+                let mut seen = std::collections::HashSet::new();
+                for vg in version_groups {
+                    match pokeapi
+                        .get_game_pokemon(vg, request.no_cache, request.include_variants)
+                        .await
+                    {
+                        Ok(pokemon) => {
+                            for p in pokemon {
+                                if seen.insert(p.form_name.clone()) {
+                                    all_pokemon.push(p);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            Self::fail_job(
+                                &storage,
+                                &mut job,
+                                &format!("Failed to fetch game pokemon for {vg}: {e}"),
+                            )
+                            .await;
+                            return;
+                        }
                     }
                 }
+                all_pokemon
             }
             TeamSource::Pokedex { pokedex_name } => {
                 match pokeapi
@@ -199,7 +222,12 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
                 {
                     Ok(pokemon) => pokemon,
                     Err(e) => {
-                        Self::fail_job(&storage, &mut job, &format!("Failed to fetch pokedex pokemon: {e}")).await;
+                        Self::fail_job(
+                            &storage,
+                            &mut job,
+                            &format!("Failed to fetch pokedex pokemon: {e}"),
+                        )
+                        .await;
                         return;
                     }
                 }
@@ -225,14 +253,25 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
         job.updated_at = Utc::now();
         let _ = storage.update_job(&job).await;
 
-        // Step 2: Apply BST filter
+        // Step 2: Apply filters
         let mut filtered = candidates;
         if let Some(min_bst) = request.min_bst {
             filtered.retain(|p| p.bst() >= min_bst);
         }
+        if !request.exclude.is_empty() {
+            filtered.retain(|p| !request.exclude.iter().any(|e| e == &p.form_name));
+        }
+        if !request.exclude_species.is_empty() {
+            filtered.retain(|p| !request.exclude_species.iter().any(|e| e == &p.species_name));
+        }
 
         if filtered.is_empty() {
-            Self::fail_job(&storage, &mut job, "No candidates remaining after filtering").await;
+            Self::fail_job(
+                &storage,
+                &mut job,
+                "No candidates remaining after filtering",
+            )
+            .await;
             return;
         }
 
@@ -422,15 +461,15 @@ mod tests {
         ) -> Result<Vec<Pokemon>, AppError> {
             Ok(vec![
                 make_test_pokemon("pikachu", vec![PokemonType::Electric], 320),
-                make_test_pokemon("charizard", vec![PokemonType::Fire, PokemonType::Flying], 534),
+                make_test_pokemon(
+                    "charizard",
+                    vec![PokemonType::Fire, PokemonType::Flying],
+                    534,
+                ),
             ])
         }
 
-        async fn get_pokemon(
-            &self,
-            name: &str,
-            _no_cache: bool,
-        ) -> Result<Pokemon, AppError> {
+        async fn get_pokemon(&self, name: &str, _no_cache: bool) -> Result<Pokemon, AppError> {
             Ok(make_test_pokemon(name, vec![PokemonType::Normal], 400))
         }
 
@@ -454,7 +493,11 @@ mod tests {
         ) -> Result<Vec<Pokemon>, AppError> {
             Ok(vec![
                 make_test_pokemon("pikachu", vec![PokemonType::Electric], 320),
-                make_test_pokemon("charizard", vec![PokemonType::Fire, PokemonType::Flying], 534),
+                make_test_pokemon(
+                    "charizard",
+                    vec![PokemonType::Fire, PokemonType::Flying],
+                    534,
+                ),
                 make_test_pokemon("mewtwo", vec![PokemonType::Psychic], 680),
             ])
         }
@@ -513,7 +556,11 @@ mod tests {
     #[tokio::test]
     async fn test_submit_and_get_job() {
         let dir = tempfile::tempdir().unwrap();
-        let storage = Arc::new(JsonFileStorage::new(dir.path().to_path_buf()).await.unwrap());
+        let storage = Arc::new(
+            JsonFileStorage::new(dir.path().to_path_buf())
+                .await
+                .unwrap(),
+        );
         let pokeapi = Arc::new(MockPokeApi);
         let svc = PokePlannerService::new(storage, pokeapi);
 
@@ -527,7 +574,11 @@ mod tests {
     #[tokio::test]
     async fn test_list_jobs() {
         let dir = tempfile::tempdir().unwrap();
-        let storage = Arc::new(JsonFileStorage::new(dir.path().to_path_buf()).await.unwrap());
+        let storage = Arc::new(
+            JsonFileStorage::new(dir.path().to_path_buf())
+                .await
+                .unwrap(),
+        );
         let pokeapi = Arc::new(MockPokeApi);
         let svc = PokePlannerService::new(storage, pokeapi);
 
@@ -551,7 +602,13 @@ mod tests {
     async fn test_get_game_pokemon() {
         let svc = make_service().await;
         let pokemon = svc
-            .get_game_pokemon("test-game", None, false, None, SortOrder::Asc, true, None)
+            .get_game_pokemon(
+                "test-game",
+                &PokemonQueryParams {
+                    include_variants: true,
+                    ..Default::default()
+                },
+            )
             .await
             .unwrap();
         assert_eq!(pokemon.len(), 2);
@@ -561,7 +618,14 @@ mod tests {
     async fn test_get_game_pokemon_with_bst_filter() {
         let svc = make_service().await;
         let pokemon = svc
-            .get_game_pokemon("test-game", Some(400), false, None, SortOrder::Asc, true, None)
+            .get_game_pokemon(
+                "test-game",
+                &PokemonQueryParams {
+                    min_bst: Some(400),
+                    include_variants: true,
+                    ..Default::default()
+                },
+            )
             .await
             .unwrap();
         // Only charizard (534) should pass, pikachu (320) filtered out
@@ -575,12 +639,12 @@ mod tests {
         let pokemon = svc
             .get_game_pokemon(
                 "test-game",
-                None,
-                false,
-                Some(SortField::Bst),
-                SortOrder::Desc,
-                true,
-                None,
+                &PokemonQueryParams {
+                    sort_by: Some(SortField::Bst),
+                    sort_order: SortOrder::Desc,
+                    include_variants: true,
+                    ..Default::default()
+                },
             )
             .await
             .unwrap();

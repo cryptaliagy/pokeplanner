@@ -17,8 +17,11 @@ const CONCURRENT_REQUESTS: usize = 10;
 const DEFAULT_REQUESTS_PER_SECOND: u32 = 20;
 const DEFAULT_BURST_SIZE: u32 = 5;
 
-type DefaultRateLimiter =
-    RateLimiter<governor::state::NotKeyed, governor::state::InMemoryState, governor::clock::DefaultClock>;
+type DefaultRateLimiter = RateLimiter<
+    governor::state::NotKeyed,
+    governor::state::InMemoryState,
+    governor::clock::DefaultClock,
+>;
 
 /// Configuration for the PokeAPI HTTP client.
 pub struct PokeApiClientConfig {
@@ -79,7 +82,11 @@ impl PokeApiHttpClient {
         no_cache: bool,
     ) -> Result<T, AppError> {
         // Check cache first
-        if let Some(cached) = self.cache.get::<T>(cache_category, cache_key, no_cache).await {
+        if let Some(cached) = self
+            .cache
+            .get::<T>(cache_category, cache_key, no_cache)
+            .await
+        {
             return Ok(cached);
         }
 
@@ -286,7 +293,12 @@ impl PokeApiClient for PokeApiHttpClient {
         let results: Vec<Result<Vec<Pokemon>, AppError>> = stream::iter(species_entries)
             .map(|(species_name, pokedex_number)| async move {
                 client
-                    .fetch_species_pokemon(&species_name, pokedex_number, no_cache, include_variants)
+                    .fetch_species_pokemon(
+                        &species_name,
+                        pokedex_number,
+                        no_cache,
+                        include_variants,
+                    )
                     .await
             })
             .buffer_unordered(CONCURRENT_REQUESTS)
@@ -305,7 +317,11 @@ impl PokeApiClient for PokeApiHttpClient {
         all_pokemon.sort_by_key(|p| (p.pokedex_number, !p.is_default_form as u8));
 
         // Cache the aggregated result
-        if let Err(e) = self.cache.set("game-pokemon", &cache_key, &all_pokemon).await {
+        if let Err(e) = self
+            .cache
+            .set("game-pokemon", &cache_key, &all_pokemon)
+            .await
+        {
             warn!("Failed to cache game pokemon: {e}");
         }
 
@@ -381,7 +397,12 @@ impl PokeApiClient for PokeApiHttpClient {
         let results: Vec<Result<Vec<Pokemon>, AppError>> = stream::iter(species_entries)
             .map(|(species_name, pokedex_number)| async move {
                 client
-                    .fetch_species_pokemon(&species_name, pokedex_number, no_cache, include_variants)
+                    .fetch_species_pokemon(
+                        &species_name,
+                        pokedex_number,
+                        no_cache,
+                        include_variants,
+                    )
                     .await
             })
             .buffer_unordered(CONCURRENT_REQUESTS)
@@ -409,10 +430,7 @@ impl PokeApiClient for PokeApiHttpClient {
         Ok(all_pokemon)
     }
 
-    async fn get_type_chart(
-        &self,
-        no_cache: bool,
-    ) -> Result<TypeEffectivenessData, AppError> {
+    async fn get_type_chart(&self, no_cache: bool) -> Result<TypeEffectivenessData, AppError> {
         // Check aggregated cache
         if let Some(cached) = self
             .cache
@@ -431,9 +449,7 @@ impl PokeApiClient for PokeApiHttpClient {
                 .unwrap_or_default();
 
             let url = format!("{}/type/{type_name}", self.base_url);
-            let type_resp: TypeResponse = self
-                .fetch(&url, "type", &type_name, no_cache)
-                .await?;
+            let type_resp: TypeResponse = self.fetch(&url, "type", &type_name, no_cache).await?;
 
             let relations = &type_resp.damage_relations;
 

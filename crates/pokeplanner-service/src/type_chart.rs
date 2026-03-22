@@ -42,86 +42,160 @@ impl TypeChart {
         use PokemonType::*;
 
         // Normal
-        add(Normal, Rock, 0.5); add(Normal, Ghost, 0.0); add(Normal, Steel, 0.5);
+        add(Normal, Rock, 0.5);
+        add(Normal, Ghost, 0.0);
+        add(Normal, Steel, 0.5);
 
         // Fire
-        add(Fire, Fire, 0.5); add(Fire, Water, 0.5); add(Fire, Grass, 2.0);
-        add(Fire, Ice, 2.0); add(Fire, Bug, 2.0); add(Fire, Rock, 0.5);
-        add(Fire, Dragon, 0.5); add(Fire, Steel, 2.0);
+        add(Fire, Fire, 0.5);
+        add(Fire, Water, 0.5);
+        add(Fire, Grass, 2.0);
+        add(Fire, Ice, 2.0);
+        add(Fire, Bug, 2.0);
+        add(Fire, Rock, 0.5);
+        add(Fire, Dragon, 0.5);
+        add(Fire, Steel, 2.0);
 
         // Water
-        add(Water, Fire, 2.0); add(Water, Water, 0.5); add(Water, Grass, 0.5);
-        add(Water, Ground, 2.0); add(Water, Rock, 2.0); add(Water, Dragon, 0.5);
+        add(Water, Fire, 2.0);
+        add(Water, Water, 0.5);
+        add(Water, Grass, 0.5);
+        add(Water, Ground, 2.0);
+        add(Water, Rock, 2.0);
+        add(Water, Dragon, 0.5);
 
         // Electric
-        add(Electric, Water, 2.0); add(Electric, Electric, 0.5); add(Electric, Grass, 0.5);
-        add(Electric, Ground, 0.0); add(Electric, Flying, 2.0); add(Electric, Dragon, 0.5);
+        add(Electric, Water, 2.0);
+        add(Electric, Electric, 0.5);
+        add(Electric, Grass, 0.5);
+        add(Electric, Ground, 0.0);
+        add(Electric, Flying, 2.0);
+        add(Electric, Dragon, 0.5);
 
         // Grass
-        add(Grass, Fire, 0.5); add(Grass, Water, 2.0); add(Grass, Grass, 0.5);
-        add(Grass, Poison, 0.5); add(Grass, Ground, 2.0); add(Grass, Flying, 0.5);
-        add(Grass, Bug, 0.5); add(Grass, Rock, 2.0); add(Grass, Dragon, 0.5);
+        add(Grass, Fire, 0.5);
+        add(Grass, Water, 2.0);
+        add(Grass, Grass, 0.5);
+        add(Grass, Poison, 0.5);
+        add(Grass, Ground, 2.0);
+        add(Grass, Flying, 0.5);
+        add(Grass, Bug, 0.5);
+        add(Grass, Rock, 2.0);
+        add(Grass, Dragon, 0.5);
         add(Grass, Steel, 0.5);
 
         // Ice
-        add(Ice, Fire, 0.5); add(Ice, Water, 0.5); add(Ice, Grass, 2.0);
-        add(Ice, Ice, 0.5); add(Ice, Ground, 2.0); add(Ice, Flying, 2.0);
-        add(Ice, Dragon, 2.0); add(Ice, Steel, 0.5);
+        add(Ice, Fire, 0.5);
+        add(Ice, Water, 0.5);
+        add(Ice, Grass, 2.0);
+        add(Ice, Ice, 0.5);
+        add(Ice, Ground, 2.0);
+        add(Ice, Flying, 2.0);
+        add(Ice, Dragon, 2.0);
+        add(Ice, Steel, 0.5);
 
         // Fighting
-        add(Fighting, Normal, 2.0); add(Fighting, Ice, 2.0); add(Fighting, Poison, 0.5);
-        add(Fighting, Flying, 0.5); add(Fighting, Psychic, 0.5); add(Fighting, Bug, 0.5);
-        add(Fighting, Rock, 2.0); add(Fighting, Ghost, 0.0); add(Fighting, Dark, 2.0);
-        add(Fighting, Steel, 2.0); add(Fighting, Fairy, 0.5);
+        add(Fighting, Normal, 2.0);
+        add(Fighting, Ice, 2.0);
+        add(Fighting, Poison, 0.5);
+        add(Fighting, Flying, 0.5);
+        add(Fighting, Psychic, 0.5);
+        add(Fighting, Bug, 0.5);
+        add(Fighting, Rock, 2.0);
+        add(Fighting, Ghost, 0.0);
+        add(Fighting, Dark, 2.0);
+        add(Fighting, Steel, 2.0);
+        add(Fighting, Fairy, 0.5);
 
         // Poison
-        add(Poison, Grass, 2.0); add(Poison, Poison, 0.5); add(Poison, Ground, 0.5);
-        add(Poison, Rock, 0.5); add(Poison, Ghost, 0.5); add(Poison, Steel, 0.0);
+        add(Poison, Grass, 2.0);
+        add(Poison, Poison, 0.5);
+        add(Poison, Ground, 0.5);
+        add(Poison, Rock, 0.5);
+        add(Poison, Ghost, 0.5);
+        add(Poison, Steel, 0.0);
         add(Poison, Fairy, 2.0);
 
         // Ground
-        add(Ground, Fire, 2.0); add(Ground, Electric, 2.0); add(Ground, Grass, 0.5);
-        add(Ground, Poison, 2.0); add(Ground, Flying, 0.0); add(Ground, Bug, 0.5);
-        add(Ground, Rock, 2.0); add(Ground, Steel, 2.0);
+        add(Ground, Fire, 2.0);
+        add(Ground, Electric, 2.0);
+        add(Ground, Grass, 0.5);
+        add(Ground, Poison, 2.0);
+        add(Ground, Flying, 0.0);
+        add(Ground, Bug, 0.5);
+        add(Ground, Rock, 2.0);
+        add(Ground, Steel, 2.0);
 
         // Flying
-        add(Flying, Electric, 0.5); add(Flying, Grass, 2.0); add(Flying, Fighting, 2.0);
-        add(Flying, Bug, 2.0); add(Flying, Rock, 0.5); add(Flying, Steel, 0.5);
+        add(Flying, Electric, 0.5);
+        add(Flying, Grass, 2.0);
+        add(Flying, Fighting, 2.0);
+        add(Flying, Bug, 2.0);
+        add(Flying, Rock, 0.5);
+        add(Flying, Steel, 0.5);
 
         // Psychic
-        add(Psychic, Fighting, 2.0); add(Psychic, Poison, 2.0); add(Psychic, Psychic, 0.5);
-        add(Psychic, Dark, 0.0); add(Psychic, Steel, 0.5);
+        add(Psychic, Fighting, 2.0);
+        add(Psychic, Poison, 2.0);
+        add(Psychic, Psychic, 0.5);
+        add(Psychic, Dark, 0.0);
+        add(Psychic, Steel, 0.5);
 
         // Bug
-        add(Bug, Fire, 0.5); add(Bug, Grass, 2.0); add(Bug, Fighting, 0.5);
-        add(Bug, Poison, 0.5); add(Bug, Flying, 0.5); add(Bug, Psychic, 2.0);
-        add(Bug, Ghost, 0.5); add(Bug, Dark, 2.0); add(Bug, Steel, 0.5);
+        add(Bug, Fire, 0.5);
+        add(Bug, Grass, 2.0);
+        add(Bug, Fighting, 0.5);
+        add(Bug, Poison, 0.5);
+        add(Bug, Flying, 0.5);
+        add(Bug, Psychic, 2.0);
+        add(Bug, Ghost, 0.5);
+        add(Bug, Dark, 2.0);
+        add(Bug, Steel, 0.5);
         add(Bug, Fairy, 0.5);
 
         // Rock
-        add(Rock, Fire, 2.0); add(Rock, Ice, 2.0); add(Rock, Fighting, 0.5);
-        add(Rock, Ground, 0.5); add(Rock, Flying, 2.0); add(Rock, Bug, 2.0);
+        add(Rock, Fire, 2.0);
+        add(Rock, Ice, 2.0);
+        add(Rock, Fighting, 0.5);
+        add(Rock, Ground, 0.5);
+        add(Rock, Flying, 2.0);
+        add(Rock, Bug, 2.0);
         add(Rock, Steel, 0.5);
 
         // Ghost
-        add(Ghost, Normal, 0.0); add(Ghost, Psychic, 2.0); add(Ghost, Ghost, 2.0);
+        add(Ghost, Normal, 0.0);
+        add(Ghost, Psychic, 2.0);
+        add(Ghost, Ghost, 2.0);
         add(Ghost, Dark, 0.5);
 
         // Dragon
-        add(Dragon, Dragon, 2.0); add(Dragon, Steel, 0.5); add(Dragon, Fairy, 0.0);
+        add(Dragon, Dragon, 2.0);
+        add(Dragon, Steel, 0.5);
+        add(Dragon, Fairy, 0.0);
 
         // Dark
-        add(Dark, Fighting, 0.5); add(Dark, Psychic, 2.0); add(Dark, Ghost, 2.0);
-        add(Dark, Dark, 0.5); add(Dark, Fairy, 0.5);
+        add(Dark, Fighting, 0.5);
+        add(Dark, Psychic, 2.0);
+        add(Dark, Ghost, 2.0);
+        add(Dark, Dark, 0.5);
+        add(Dark, Fairy, 0.5);
 
         // Steel
-        add(Steel, Fire, 0.5); add(Steel, Water, 0.5); add(Steel, Electric, 0.5);
-        add(Steel, Ice, 2.0); add(Steel, Rock, 2.0); add(Steel, Steel, 0.5);
+        add(Steel, Fire, 0.5);
+        add(Steel, Water, 0.5);
+        add(Steel, Electric, 0.5);
+        add(Steel, Ice, 2.0);
+        add(Steel, Rock, 2.0);
+        add(Steel, Steel, 0.5);
         add(Steel, Fairy, 2.0);
 
         // Fairy
-        add(Fairy, Fire, 0.5); add(Fairy, Poison, 0.5); add(Fairy, Fighting, 2.0);
-        add(Fairy, Dragon, 2.0); add(Fairy, Dark, 2.0); add(Fairy, Steel, 0.5);
+        add(Fairy, Fire, 0.5);
+        add(Fairy, Poison, 0.5);
+        add(Fairy, Fighting, 2.0);
+        add(Fairy, Dragon, 2.0);
+        add(Fairy, Dark, 2.0);
+        add(Fairy, Steel, 0.5);
 
         Self::from_api_data(&TypeEffectivenessData { entries })
     }
@@ -142,6 +216,22 @@ impl TypeChart {
             .iter()
             .map(|&def_type| self.effectiveness(attack_type, def_type))
             .product()
+    }
+
+    /// Compute defensive weaknesses for a pokemon (types that deal >= multiplier).
+    /// Returns lists of (2x weaknesses, 4x weaknesses).
+    pub fn pokemon_weaknesses(&self, defender_types: &[PokemonType]) -> (Vec<PokemonType>, Vec<PokemonType>) {
+        let mut weak_2x = Vec::new();
+        let mut weak_4x = Vec::new();
+        for &atk in &PokemonType::ALL {
+            let mult = self.effectiveness_against_pokemon(atk, defender_types);
+            if mult >= 4.0 {
+                weak_4x.push(atk);
+            } else if mult >= 2.0 {
+                weak_2x.push(atk);
+            }
+        }
+        (weak_2x, weak_4x)
     }
 
     /// Calculate offensive coverage score for a team.
@@ -216,9 +306,9 @@ impl TypeChart {
             .iter()
             .filter(|enemy| {
                 team_types.iter().any(|my_types| {
-                    my_types.iter().any(|&atk| {
-                        self.effectiveness_against_pokemon(atk, enemy) >= 2.0
-                    })
+                    my_types
+                        .iter()
+                        .any(|&atk| self.effectiveness_against_pokemon(atk, enemy) >= 2.0)
                 })
             })
             .count();
@@ -240,9 +330,9 @@ impl TypeChart {
             .filter(|my_types| {
                 // This team member is "safe" if no enemy STAB type hits it SE
                 !enemy_types.iter().any(|enemy| {
-                    enemy.iter().any(|&atk| {
-                        self.effectiveness_against_pokemon(atk, my_types) >= 2.0
-                    })
+                    enemy
+                        .iter()
+                        .any(|&atk| self.effectiveness_against_pokemon(atk, my_types) >= 2.0)
                 })
             })
             .count();
@@ -260,9 +350,9 @@ impl TypeChart {
             .enumerate()
             .filter(|(_, enemy)| {
                 !team_types.iter().any(|my_types| {
-                    my_types.iter().any(|&atk| {
-                        self.effectiveness_against_pokemon(atk, enemy) >= 2.0
-                    })
+                    my_types
+                        .iter()
+                        .any(|&atk| self.effectiveness_against_pokemon(atk, enemy) >= 2.0)
                 })
             })
             .map(|(i, _)| i)
@@ -324,16 +414,14 @@ mod tests {
     #[test]
     fn test_dual_type_4x_weakness() {
         // Grass vs Water/Ground = 2.0 * 2.0 = 4.0
-        let multiplier =
-            chart().effectiveness_against_pokemon(Grass, &[Water, Ground]);
+        let multiplier = chart().effectiveness_against_pokemon(Grass, &[Water, Ground]);
         assert_eq!(multiplier, 4.0);
     }
 
     #[test]
     fn test_dual_type_immunity() {
         // Electric vs Water/Ground: Electric vs Water = 2.0, Electric vs Ground = 0.0 → 0.0
-        let multiplier =
-            chart().effectiveness_against_pokemon(Electric, &[Water, Ground]);
+        let multiplier = chart().effectiveness_against_pokemon(Electric, &[Water, Ground]);
         assert_eq!(multiplier, 0.0);
     }
 
@@ -368,12 +456,12 @@ mod tests {
     fn test_team_defensive_score_diverse_team() {
         // A well-typed team should have a good defensive score
         let team_types = vec![
-            vec![Water, Ground],   // Swampert
-            vec![Steel, Psychic],  // Metagross
-            vec![Fire, Flying],    // Charizard
-            vec![Grass, Poison],   // Venusaur
-            vec![Electric],        // Jolteon
-            vec![Dark, Ghost],     // Spiritomb (pre-Fairy)
+            vec![Water, Ground],  // Swampert
+            vec![Steel, Psychic], // Metagross
+            vec![Fire, Flying],   // Charizard
+            vec![Grass, Poison],  // Venusaur
+            vec![Electric],       // Jolteon
+            vec![Dark, Ghost],    // Spiritomb (pre-Fairy)
         ];
         let score = chart().team_defensive_score(&team_types);
         // Should be reasonable (>0.5)
