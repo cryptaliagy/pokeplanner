@@ -13,7 +13,7 @@ use crate::types::*;
 use crate::VersionGroupInfo;
 
 const DEFAULT_BASE_URL: &str = "https://pokeapi.co/api/v2";
-const CONCURRENT_REQUESTS: usize = 10;
+const DEFAULT_CONCURRENT_REQUESTS: usize = 10;
 const DEFAULT_REQUESTS_PER_SECOND: u32 = 20;
 const DEFAULT_BURST_SIZE: u32 = 5;
 
@@ -32,6 +32,8 @@ pub struct PokeApiClientConfig {
     pub requests_per_second: u32,
     /// Maximum burst size (requests allowed above the sustained rate). Default: 5.
     pub burst_size: u32,
+    /// Maximum number of concurrent HTTP requests. Default: 10.
+    pub concurrent_requests: usize,
 }
 
 impl PokeApiClientConfig {
@@ -41,6 +43,7 @@ impl PokeApiClientConfig {
             base_url: DEFAULT_BASE_URL.to_string(),
             requests_per_second: DEFAULT_REQUESTS_PER_SECOND,
             burst_size: DEFAULT_BURST_SIZE,
+            concurrent_requests: DEFAULT_CONCURRENT_REQUESTS,
         }
     }
 }
@@ -50,6 +53,7 @@ pub struct PokeApiHttpClient {
     cache: DiskCache,
     rate_limiter: Arc<DefaultRateLimiter>,
     base_url: String,
+    concurrent_requests: usize,
 }
 
 impl PokeApiHttpClient {
@@ -71,7 +75,13 @@ impl PokeApiHttpClient {
             cache,
             rate_limiter,
             base_url: config.base_url,
+            concurrent_requests: config.concurrent_requests.max(1),
         })
+    }
+
+    /// Returns a reference to the underlying disk cache for management operations.
+    pub fn cache(&self) -> &DiskCache {
+        &self.cache
     }
 
     async fn fetch<T: serde::de::DeserializeOwned + serde::Serialize>(
@@ -301,7 +311,7 @@ impl PokeApiClient for PokeApiHttpClient {
                     )
                     .await
             })
-            .buffer_unordered(CONCURRENT_REQUESTS)
+            .buffer_unordered(self.concurrent_requests)
             .collect()
             .await;
 
@@ -405,7 +415,7 @@ impl PokeApiClient for PokeApiHttpClient {
                     )
                     .await
             })
-            .buffer_unordered(CONCURRENT_REQUESTS)
+            .buffer_unordered(self.concurrent_requests)
             .collect()
             .await;
 

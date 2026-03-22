@@ -78,14 +78,19 @@ Two layers of caching in `data/cache/`:
 
 All caches use 1-year TTL. Bypassed via `--no-cache` (CLI), `?no_cache=true` (REST), or `no_cache: true` (gRPC).
 
+The CLI provides a `cache` subcommand for cache management:
+- `cache stats` — inspect cache entry counts, sizes, and location
+- `cache populate` — pre-fetch data with reduced concurrency (3 concurrent, 5 req/s) to be gentle on the API
+- `cache clear` — selectively or fully remove cached data (by game, pokedex, pokemon, type chart, or all/stale)
+
 ## Rate Limiting
 
 PokeAPI is a free, no-auth public API. We are responsible consumers:
 
 - **Default rate: 20 requests/second** with a burst allowance of 5. This is conservative — PokeAPI does not publish a hard limit, but sits behind Cloudflare which can throttle or block aggressive clients.
-- **Configurable** via `PokeApiClientConfig` — binaries can adjust `requests_per_second` and `burst_size`.
+- **Configurable** via `PokeApiClientConfig` — binaries can adjust `requests_per_second`, `burst_size`, and `concurrent_requests`.
 - **Single shared rate limiter**: All concurrent jobs and API handlers share one `Arc<PokeApiHttpClient>`, so the rate limit is global per process, not per-request or per-job. Two concurrent jobs each get roughly half the budget.
-- **Concurrency cap**: Mass-fetch operations use `BufferedUnordered(10)` — at most 10 HTTP requests in flight at once per fetch operation. Combined with the rate limiter, this prevents connection storms.
+- **Concurrency cap**: Mass-fetch operations use `BufferedUnordered(N)` — at most N HTTP requests in flight at once per fetch operation (default 10, configurable via `concurrent_requests`). Combined with the rate limiter, this prevents connection storms. The `cache populate` CLI uses lower values (3 concurrent, 5 req/s) to be gentle on the API.
 - **Aggressive caching eliminates repeat calls**: After the first cold-cache fetch, all subsequent requests for the same data are served from disk. The rate limiter only matters for cold-cache scenarios.
 
 ### Expected cold-cache times (national dex, 1028 species)

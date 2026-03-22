@@ -133,6 +133,18 @@ Jobs are submitted, assigned a UUID, and processed asynchronously via `tokio::sp
 | `pokemon <name>` | Get pokemon details (colored stat bars, types) |
 | `plan-team` | Plan optimal team (`--game` (CSV) or `--pokedex` or `--pokemon`, `--min-bst`, `--top-k`, `--exclude-variant-type`) |
 | `analyze-team <names>` | Analyze type coverage |
+| `cache stats` | Show cache statistics (entry counts, sizes, location) |
+| `cache populate games` | Pre-fetch all version group metadata |
+| `cache populate type-chart` | Pre-fetch the type effectiveness chart |
+| `cache populate game <name>` | Pre-fetch all pokemon for a game (`--include-variants`) |
+| `cache populate pokedex <name>` | Pre-fetch all pokemon from a pokedex (`--include-variants`) |
+| `cache populate all` | Pre-fetch everything (`--include-variants`); uses lower concurrency (3 req, 5 rps) |
+| `cache clear all` | Remove all cached data |
+| `cache clear stale` | Remove only expired entries |
+| `cache clear game <name>` | Remove cached data for a game |
+| `cache clear pokedex <name>` | Remove cached data for a pokedex |
+| `cache clear pokemon <name>` | Remove cached data for a pokemon |
+| `cache clear type-chart` | Remove the cached type chart |
 
 ## Testing
 

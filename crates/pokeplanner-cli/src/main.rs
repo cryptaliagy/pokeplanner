@@ -6,7 +6,7 @@ use colored::Colorize;
 use pokeplanner_core::{
     PokemonQueryParams, PokemonType, SortField, SortOrder, TeamPlanRequest, TeamSource,
 };
-use pokeplanner_pokeapi::PokeApiHttpClient;
+use pokeplanner_pokeapi::{PokeApiClientConfig, PokeApiHttpClient};
 use pokeplanner_service::PokePlannerService;
 use pokeplanner_storage::JsonFileStorage;
 use tracing_subscriber::EnvFilter;
@@ -125,6 +125,82 @@ enum Commands {
         #[arg(long)]
         no_cache: bool,
     },
+    /// Manage the PokeAPI disk cache
+    Cache {
+        #[command(subcommand)]
+        action: CacheAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum CacheAction {
+    /// Show cache statistics (entry counts, sizes, location)
+    Stats,
+    /// Pre-fetch and cache data from PokeAPI (uses lower concurrency)
+    Populate {
+        #[command(subcommand)]
+        target: PopulateTarget,
+    },
+    /// Remove cached data
+    Clear {
+        #[command(subcommand)]
+        target: ClearTarget,
+    },
+}
+
+#[derive(Subcommand)]
+enum PopulateTarget {
+    /// Fetch all version group metadata
+    Games,
+    /// Fetch the type effectiveness chart
+    TypeChart,
+    /// Fetch all pokemon for a game (version group)
+    Game {
+        /// Version group name (e.g., "red-blue", "scarlet-violet")
+        name: String,
+        /// Include alternate forms (megas, regional variants, etc.)
+        #[arg(long)]
+        include_variants: bool,
+    },
+    /// Fetch all pokemon from a pokedex
+    Pokedex {
+        /// Pokedex name (e.g., "national", "kanto")
+        name: String,
+        /// Include alternate forms (megas, regional variants, etc.)
+        #[arg(long)]
+        include_variants: bool,
+    },
+    /// Fetch everything: all games, their pokemon, and the type chart
+    All {
+        /// Include alternate forms (megas, regional variants, etc.)
+        #[arg(long)]
+        include_variants: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum ClearTarget {
+    /// Remove all cached data
+    All,
+    /// Remove only expired (stale) cache entries
+    Stale,
+    /// Remove cached data for a specific game
+    Game {
+        /// Version group name
+        name: String,
+    },
+    /// Remove cached data for a specific pokedex
+    Pokedex {
+        /// Pokedex name
+        name: String,
+    },
+    /// Remove cached data for a specific pokemon
+    Pokemon {
+        /// Pokemon form name (e.g., "pikachu", "charizard-mega-x")
+        name: String,
+    },
+    /// Remove the cached type chart
+    TypeChart,
 }
 
 #[derive(Clone, ValueEnum)]
@@ -178,9 +254,10 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let cli = Cli::parse();
+    let cache_dir = cli.cache_dir;
 
     let storage = Arc::new(JsonFileStorage::new(cli.data_dir).await?);
-    let pokeapi = Arc::new(PokeApiHttpClient::new(cli.cache_dir).await?);
+    let pokeapi = Arc::new(PokeApiHttpClient::new(cache_dir.clone()).await?);
     let service = PokePlannerService::new(storage, pokeapi);
 
     match cli.command {
@@ -346,9 +423,258 @@ async fn main() -> anyhow::Result<()> {
             let coverage = service.analyze_team(pokemon, no_cache).await?;
             println!("{}", serde_json::to_string_pretty(&coverage)?);
         }
+        Commands::Cache { action } => {
+            handle_cache_action(action, &cache_dir).await?;
+        }
     }
 
     Ok(())
+}
+
+/// Create a PokeApiHttpClient with lower concurrency for cache populate operations.
+async fn make_populate_client(cache_dir: &std::path::Path) -> anyhow::Result<PokeApiHttpClient> {
+    let config = PokeApiClientConfig {
+        cache_path: cache_dir.to_path_buf(),
+        base_url: "https://pokeapi.co/api/v2".to_string(),
+        requests_per_second: 5,
+        burst_size: 2,
+        concurrent_requests: 3,
+    };
+    Ok(PokeApiHttpClient::with_config(config).await?)
+}
+
+async fn handle_cache_action(action: CacheAction, cache_dir: &std::path::Path) -> anyhow::Result<()> {
+    match action {
+        CacheAction::Stats => {
+            let client = PokeApiHttpClient::new(cache_dir.to_path_buf()).await?;
+            let stats = client.cache().stats().await;
+            println!("{}", "Cache Statistics".bold());
+            println!("  {} {}", "Location:".dimmed(), stats.base_path.display());
+            println!(
+                "  {} {} entries, {}",
+                "Total:".dimmed(),
+                stats.total_entries,
+                format_bytes(stats.total_size_bytes),
+            );
+            println!();
+
+            if stats.categories.is_empty() {
+                println!("  {}", "(cache is empty)".dimmed());
+            } else {
+                println!(
+                    "  {:<22} {:>8} {:>10}",
+                    "Category".bold(),
+                    "Entries".bold(),
+                    "Size".bold(),
+                );
+                println!("  {}", "-".repeat(42).dimmed());
+                for cat in &stats.categories {
+                    println!(
+                        "  {:<22} {:>8} {:>10}",
+                        cat.name,
+                        cat.entries,
+                        format_bytes(cat.size_bytes),
+                    );
+                }
+            }
+        }
+        CacheAction::Clear { target } => {
+            let client = PokeApiHttpClient::new(cache_dir.to_path_buf()).await?;
+            let cache = client.cache();
+
+            match target {
+                ClearTarget::All => {
+                    let count = cache.clear_all().await?;
+                    println!("Removed {} cached entries.", count);
+                }
+                ClearTarget::Stale => {
+                    let count = cache.clear_stale().await?;
+                    if count > 0 {
+                        println!("Removed {} expired entries.", count);
+                    } else {
+                        println!("No expired entries found.");
+                    }
+                }
+                ClearTarget::Game { name } => {
+                    // Clear both variant combos of the aggregated cache
+                    let mut count = 0u64;
+                    for variants in [true, false] {
+                        let key = format!("{name}-variants-{variants}");
+                        if cache.remove("game-pokemon", &key).await? {
+                            count += 1;
+                        }
+                    }
+                    if count > 0 {
+                        println!("Cleared game pokemon cache for '{name}'.");
+                    } else {
+                        println!("No cached data found for game '{name}'.");
+                    }
+                }
+                ClearTarget::Pokedex { name } => {
+                    let mut count = 0u64;
+                    for variants in [true, false] {
+                        let key = format!("{name}-variants-{variants}");
+                        if cache.remove("pokedex-pokemon", &key).await? {
+                            count += 1;
+                        }
+                    }
+                    if count > 0 {
+                        println!("Cleared pokedex pokemon cache for '{name}'.");
+                    } else {
+                        println!("No cached data found for pokedex '{name}'.");
+                    }
+                }
+                ClearTarget::Pokemon { name } => {
+                    let removed_pokemon = cache.remove("pokemon", &name).await?;
+                    let removed_species = cache.remove("species", &name).await?;
+                    if removed_pokemon || removed_species {
+                        println!("Cleared cached data for pokemon '{name}'.");
+                    } else {
+                        println!("No cached data found for pokemon '{name}'.");
+                    }
+                }
+                ClearTarget::TypeChart => {
+                    let mut count = 0u64;
+                    if cache.remove("type-chart", "current").await? {
+                        count += 1;
+                    }
+                    // Also clear individual type entries
+                    count += cache.clear_category("type").await?;
+                    if count > 0 {
+                        println!("Cleared type chart cache ({count} entries).");
+                    } else {
+                        println!("No type chart data cached.");
+                    }
+                }
+            }
+        }
+        CacheAction::Populate { target } => {
+            let client = make_populate_client(cache_dir).await?;
+
+            match target {
+                PopulateTarget::Games => {
+                    populate_games(&client).await?;
+                }
+                PopulateTarget::TypeChart => {
+                    populate_type_chart(&client).await?;
+                }
+                PopulateTarget::Game { name, include_variants } => {
+                    populate_games(&client).await?;
+                    populate_game_pokemon(&client, &name, include_variants).await?;
+                }
+                PopulateTarget::Pokedex { name, include_variants } => {
+                    populate_pokedex_pokemon(&client, &name, include_variants).await?;
+                }
+                PopulateTarget::All { include_variants } => {
+                    let groups = populate_games(&client).await?;
+                    populate_type_chart(&client).await?;
+
+                    println!();
+                    println!(
+                        "{} Populating pokemon for {} games...",
+                        "==>".bold(),
+                        groups.len(),
+                    );
+                    for (i, group) in groups.iter().enumerate() {
+                        println!();
+                        println!(
+                            "{} [{}/{}] {}",
+                            "==>".bold(),
+                            i + 1,
+                            groups.len(),
+                            group.name.bold(),
+                        );
+                        populate_game_pokemon(&client, &group.name, include_variants).await?;
+                    }
+
+                    println!();
+                    println!("{}", "Cache population complete!".green().bold());
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+use pokeplanner_pokeapi::PokeApiClient;
+
+async fn populate_games(
+    client: &PokeApiHttpClient,
+) -> anyhow::Result<Vec<pokeplanner_pokeapi::VersionGroupInfo>> {
+    eprint!("  Fetching version groups... ");
+    let groups = client.get_version_groups(false).await?;
+    eprintln!("{} ({} games)", "done".green(), groups.len());
+    for group in &groups {
+        eprintln!(
+            "    {} {}",
+            group.name,
+            format!("({})", group.versions.join(", ")).dimmed(),
+        );
+    }
+    Ok(groups)
+}
+
+async fn populate_type_chart(client: &PokeApiHttpClient) -> anyhow::Result<()> {
+    eprintln!("  Fetching type chart (18 types)...");
+    // The get_type_chart method fetches all 18 types. Since we want progress,
+    // we call it — individual type fetches are cached along the way.
+    client.get_type_chart(false).await?;
+    eprintln!("  Type chart: {}", "done".green());
+    Ok(())
+}
+
+async fn populate_game_pokemon(
+    client: &PokeApiHttpClient,
+    game: &str,
+    include_variants: bool,
+) -> anyhow::Result<()> {
+    let variant_label = if include_variants {
+        " (with variants)"
+    } else {
+        ""
+    };
+    eprint!("  Fetching pokemon for '{game}'{variant_label}... ");
+
+    let pokemon = client.get_game_pokemon(game, false, include_variants).await?;
+    eprintln!(
+        "{} ({} pokemon)",
+        "done".green(),
+        pokemon.len(),
+    );
+    Ok(())
+}
+
+async fn populate_pokedex_pokemon(
+    client: &PokeApiHttpClient,
+    pokedex: &str,
+    include_variants: bool,
+) -> anyhow::Result<()> {
+    let variant_label = if include_variants {
+        " (with variants)"
+    } else {
+        ""
+    };
+    eprint!("  Fetching pokemon for pokedex '{pokedex}'{variant_label}... ");
+
+    let pokemon = client
+        .get_pokedex_pokemon(pokedex, false, include_variants)
+        .await?;
+    eprintln!(
+        "{} ({} pokemon)",
+        "done".green(),
+        pokemon.len(),
+    );
+    Ok(())
+}
+
+fn format_bytes(bytes: u64) -> String {
+    if bytes < 1024 {
+        format!("{bytes} B")
+    } else if bytes < 1024 * 1024 {
+        format!("{:.1} KB", bytes as f64 / 1024.0)
+    } else {
+        format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
+    }
 }
 
 // ---------------------------------------------------------------------------
