@@ -80,12 +80,10 @@ enum Commands {
         #[arg(long)]
         limit: Option<usize>,
     },
-    /// Get details for a specific pokemon
+    /// Look up or search for pokemon
     Pokemon {
-        /// Pokemon name (e.g., "pikachu", "charizard-mega-x")
-        name: String,
-        #[arg(long)]
-        no_cache: bool,
+        #[command(subcommand)]
+        action: PokemonAction,
     },
     /// Plan an optimal team
     PlanTeam {
@@ -158,6 +156,88 @@ enum UnusableAction {
     List,
     /// Clear the entire unusable list
     Clear,
+}
+
+#[derive(Subcommand)]
+enum PokemonAction {
+    /// Get details for a specific pokemon
+    Show {
+        /// Pokemon name (e.g., "pikachu", "charizard-mega-x")
+        name: String,
+        #[arg(long)]
+        no_cache: bool,
+    },
+    /// Search for pokemon matching criteria
+    Search {
+        /// Search within a game (version group name, e.g., "red-blue")
+        #[arg(long, value_delimiter = ',')]
+        game: Option<Vec<String>>,
+        /// Search within a pokedex (e.g., "national", "kanto")
+        #[arg(long)]
+        pokedex: Option<String>,
+
+        /// Filter by name (substring match on form or species name)
+        #[arg(long)]
+        name: Option<String>,
+
+        /// Filter by type (comma-separated, e.g., "fire", "fire,dragon")
+        #[arg(long, value_delimiter = ',')]
+        r#type: Option<Vec<String>>,
+        /// Exclude pokemon with these types (comma-separated, e.g., "poison,fairy")
+        #[arg(long, value_delimiter = ',')]
+        not_type: Option<Vec<String>>,
+        /// Only show single-type pokemon
+        #[arg(long)]
+        mono_type: bool,
+        /// Only show dual-type pokemon
+        #[arg(long)]
+        dual_type: bool,
+
+        /// Filter by BST (e.g., "ge500", "lt400", "eq600")
+        #[arg(long)]
+        bst: Option<String>,
+        /// Filter by HP stat (e.g., "ge100", "lt50")
+        #[arg(long)]
+        hp: Option<String>,
+        /// Filter by Attack stat
+        #[arg(long)]
+        attack: Option<String>,
+        /// Filter by Defense stat
+        #[arg(long)]
+        defense: Option<String>,
+        /// Filter by Special Attack stat
+        #[arg(long)]
+        special_attack: Option<String>,
+        /// Filter by Special Defense stat
+        #[arg(long)]
+        special_defense: Option<String>,
+        /// Filter by Speed stat
+        #[arg(long)]
+        speed: Option<String>,
+
+        /// Only show default (base) forms
+        #[arg(long)]
+        default_only: bool,
+        /// Only show variant (non-default) forms
+        #[arg(long)]
+        variants_only: bool,
+        /// Only show specific variant types (e.g., "mega", "alola", "gmax")
+        #[arg(long, value_delimiter = ',')]
+        variant_type: Option<Vec<String>>,
+
+        /// Sort results by field
+        #[arg(long, value_enum)]
+        sort_by: Option<CliSortField>,
+        /// Sort order
+        #[arg(long, value_enum, default_value = "asc")]
+        sort_order: CliSortOrder,
+        /// Limit number of results
+        #[arg(long)]
+        limit: Option<usize>,
+
+        #[arg(long)]
+        no_cache: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -350,28 +430,8 @@ async fn main() -> anyhow::Result<()> {
                 .await?;
             print_pokemon_list(&pokemon, &unusable);
         }
-        Commands::Pokemon { name, no_cache } => {
-            let pokemon = service.get_pokemon(&name, no_cache).await?;
-            print_pokemon_detail(&pokemon, &unusable);
-
-            // Show other forms/varieties of this species
-            let varieties = service
-                .get_species_varieties(&pokemon.species_name, no_cache)
-                .await?;
-            let others: Vec<&pokeplanner_core::Pokemon> = varieties
-                .iter()
-                .filter(|v| v.form_name != pokemon.form_name)
-                .collect();
-            if !others.is_empty() {
-                println!(
-                    "  {} {}",
-                    "Other forms:".bold(),
-                    format!("({} total)", varieties.len()).dimmed(),
-                );
-                for v in &others {
-                    print_pokemon_detail(v, &unusable);
-                }
-            }
+        Commands::Pokemon { action } => {
+            handle_pokemon_action(action, &service, &unusable).await?;
         }
         Commands::PlanTeam {
             game,
@@ -478,6 +538,266 @@ async fn make_populate_client(cache_dir: &std::path::Path) -> anyhow::Result<Pok
         concurrent_requests: 3,
     };
     Ok(PokeApiHttpClient::with_config(config).await?)
+}
+
+/// Parse a stat filter string like "ge500", "lt100", "eq120".
+/// Returns a closure that tests a u32 value against the filter.
+fn parse_stat_filter(s: &str) -> anyhow::Result<Box<dyn Fn(u32) -> bool>> {
+    let s = s.trim();
+    let (op, val_str) = if s.starts_with("ge") {
+        ("ge", &s[2..])
+    } else if s.starts_with("gt") {
+        ("gt", &s[2..])
+    } else if s.starts_with("le") {
+        ("le", &s[2..])
+    } else if s.starts_with("lt") {
+        ("lt", &s[2..])
+    } else if s.starts_with("eq") {
+        ("eq", &s[2..])
+    } else {
+        // Default: treat bare number as "ge"
+        ("ge", s)
+    };
+
+    let val: u32 = val_str
+        .parse()
+        .map_err(|_| anyhow::anyhow!("Invalid stat filter value: '{val_str}' (expected a number)"))?;
+
+    Ok(match op {
+        "ge" => Box::new(move |v| v >= val),
+        "gt" => Box::new(move |v| v > val),
+        "le" => Box::new(move |v| v <= val),
+        "lt" => Box::new(move |v| v < val),
+        "eq" => Box::new(move |v| v == val),
+        _ => unreachable!(),
+    })
+}
+
+async fn handle_pokemon_action<S: pokeplanner_storage::Storage, P: pokeplanner_pokeapi::PokeApiClient>(
+    action: PokemonAction,
+    service: &PokePlannerService<S, P>,
+    unusable: &UnusableStore,
+) -> anyhow::Result<()> {
+    match action {
+        PokemonAction::Show { name, no_cache } => {
+            let pokemon = service.get_pokemon(&name, no_cache).await?;
+            print_pokemon_detail(&pokemon, unusable);
+
+            // Show other forms/varieties of this species
+            let varieties = service
+                .get_species_varieties(&pokemon.species_name, no_cache)
+                .await?;
+            let others: Vec<&pokeplanner_core::Pokemon> = varieties
+                .iter()
+                .filter(|v| v.form_name != pokemon.form_name)
+                .collect();
+            if !others.is_empty() {
+                println!(
+                    "  {} {}",
+                    "Other forms:".bold(),
+                    format!("({} total)", varieties.len()).dimmed(),
+                );
+                for v in &others {
+                    print_pokemon_detail(v, unusable);
+                }
+            }
+        }
+        PokemonAction::Search {
+            game,
+            pokedex,
+            name,
+            r#type,
+            not_type,
+            mono_type,
+            dual_type,
+            bst,
+            hp,
+            attack,
+            defense,
+            special_attack,
+            special_defense,
+            speed,
+            default_only,
+            variants_only,
+            variant_type,
+            sort_by,
+            sort_order,
+            limit,
+            no_cache,
+        } => {
+            // Step 1: Fetch candidate pokemon from source
+            // Include all variants; we'll filter later
+            let mut candidates = if let Some(games) = game {
+                let mut all = Vec::new();
+                let mut seen = std::collections::HashSet::new();
+                for g in &games {
+                    let pokemon = service
+                        .get_game_pokemon(
+                            g,
+                            &PokemonQueryParams {
+                                no_cache,
+                                include_variants: true,
+                                ..Default::default()
+                            },
+                        )
+                        .await?;
+                    for p in pokemon {
+                        if seen.insert(p.form_name.clone()) {
+                            all.push(p);
+                        }
+                    }
+                }
+                all
+            } else if let Some(ref dex) = pokedex {
+                service
+                    .get_pokedex_pokemon(
+                        dex,
+                        &PokemonQueryParams {
+                            no_cache,
+                            include_variants: true,
+                            ..Default::default()
+                        },
+                    )
+                    .await?
+            } else {
+                // Default: national pokedex
+                service
+                    .get_pokedex_pokemon(
+                        "national",
+                        &PokemonQueryParams {
+                            no_cache,
+                            include_variants: true,
+                            ..Default::default()
+                        },
+                    )
+                    .await?
+            };
+
+            // Step 2: Apply filters
+
+            // Name substring filter
+            if let Some(ref pattern) = name {
+                let pattern_lower = pattern.to_lowercase();
+                candidates.retain(|p| {
+                    p.form_name.to_lowercase().contains(&pattern_lower)
+                        || p.species_name.to_lowercase().contains(&pattern_lower)
+                });
+            }
+
+            // Type inclusion filter: must have at least one of the specified types
+            if let Some(ref type_names) = r#type {
+                let types: Vec<PokemonType> = type_names
+                    .iter()
+                    .filter_map(|t| serde_json::from_value(serde_json::Value::String(t.to_lowercase())).ok())
+                    .collect();
+                if !types.is_empty() {
+                    candidates.retain(|p| p.types.iter().any(|pt| types.contains(pt)));
+                }
+            }
+
+            // Type exclusion filter: must NOT have any of the specified types
+            if let Some(ref type_names) = not_type {
+                let types: Vec<PokemonType> = type_names
+                    .iter()
+                    .filter_map(|t| serde_json::from_value(serde_json::Value::String(t.to_lowercase())).ok())
+                    .collect();
+                if !types.is_empty() {
+                    candidates.retain(|p| !p.types.iter().any(|pt| types.contains(pt)));
+                }
+            }
+
+            // Mono-type / dual-type
+            if mono_type {
+                candidates.retain(|p| p.types.len() == 1);
+            }
+            if dual_type {
+                candidates.retain(|p| p.types.len() >= 2);
+            }
+
+            // Form filters
+            if default_only {
+                candidates.retain(|p| p.is_default_form);
+            }
+            if variants_only {
+                candidates.retain(|p| !p.is_default_form);
+            }
+            if let Some(ref vt_keywords) = variant_type {
+                candidates.retain(|p| {
+                    if p.is_default_form {
+                        return false;
+                    }
+                    let suffix = p
+                        .form_name
+                        .strip_prefix(&p.species_name)
+                        .unwrap_or("")
+                        .to_lowercase();
+                    vt_keywords
+                        .iter()
+                        .any(|kw| suffix.contains(&kw.to_lowercase()))
+                });
+            }
+
+            // Stat filters
+            if let Some(ref f) = bst {
+                let pred = parse_stat_filter(f)?;
+                candidates.retain(|p| pred(p.bst()));
+            }
+            if let Some(ref f) = hp {
+                let pred = parse_stat_filter(f)?;
+                candidates.retain(|p| pred(p.stats.hp));
+            }
+            if let Some(ref f) = attack {
+                let pred = parse_stat_filter(f)?;
+                candidates.retain(|p| pred(p.stats.attack));
+            }
+            if let Some(ref f) = defense {
+                let pred = parse_stat_filter(f)?;
+                candidates.retain(|p| pred(p.stats.defense));
+            }
+            if let Some(ref f) = special_attack {
+                let pred = parse_stat_filter(f)?;
+                candidates.retain(|p| pred(p.stats.special_attack));
+            }
+            if let Some(ref f) = special_defense {
+                let pred = parse_stat_filter(f)?;
+                candidates.retain(|p| pred(p.stats.special_defense));
+            }
+            if let Some(ref f) = speed {
+                let pred = parse_stat_filter(f)?;
+                candidates.retain(|p| pred(p.stats.speed));
+            }
+
+            // Step 3: Sort and limit
+            if let Some(field) = sort_by {
+                let core_field: SortField = field.into();
+                let core_order: SortOrder = sort_order.into();
+                candidates.sort_by(|a, b| {
+                    let cmp = match core_field {
+                        SortField::Bst => a.bst().cmp(&b.bst()),
+                        SortField::Hp => a.stats.hp.cmp(&b.stats.hp),
+                        SortField::Attack => a.stats.attack.cmp(&b.stats.attack),
+                        SortField::Defense => a.stats.defense.cmp(&b.stats.defense),
+                        SortField::SpecialAttack => a.stats.special_attack.cmp(&b.stats.special_attack),
+                        SortField::SpecialDefense => a.stats.special_defense.cmp(&b.stats.special_defense),
+                        SortField::Speed => a.stats.speed.cmp(&b.stats.speed),
+                        SortField::Name => a.form_name.cmp(&b.form_name),
+                        SortField::PokedexNumber => a.pokedex_number.cmp(&b.pokedex_number),
+                    };
+                    match core_order {
+                        SortOrder::Asc => cmp,
+                        SortOrder::Desc => cmp.reverse(),
+                    }
+                });
+            }
+            if let Some(n) = limit {
+                candidates.truncate(n);
+            }
+
+            // Step 4: Display
+            print_pokemon_list(&candidates, unusable);
+        }
+    }
+    Ok(())
 }
 
 async fn handle_cache_action(action: CacheAction, cache_dir: &std::path::Path) -> anyhow::Result<()> {
@@ -1053,4 +1373,62 @@ fn print_team_plans(plans: &[pokeplanner_core::TeamPlan]) {
         }
     }
     println!();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_stat_filter_ge() {
+        let f = parse_stat_filter("ge500").unwrap();
+        assert!(f(500));
+        assert!(f(501));
+        assert!(!f(499));
+    }
+
+    #[test]
+    fn test_parse_stat_filter_gt() {
+        let f = parse_stat_filter("gt100").unwrap();
+        assert!(!f(100));
+        assert!(f(101));
+    }
+
+    #[test]
+    fn test_parse_stat_filter_le() {
+        let f = parse_stat_filter("le50").unwrap();
+        assert!(f(50));
+        assert!(f(49));
+        assert!(!f(51));
+    }
+
+    #[test]
+    fn test_parse_stat_filter_lt() {
+        let f = parse_stat_filter("lt200").unwrap();
+        assert!(f(199));
+        assert!(!f(200));
+    }
+
+    #[test]
+    fn test_parse_stat_filter_eq() {
+        let f = parse_stat_filter("eq120").unwrap();
+        assert!(f(120));
+        assert!(!f(119));
+        assert!(!f(121));
+    }
+
+    #[test]
+    fn test_parse_stat_filter_bare_number() {
+        // Bare number defaults to ge
+        let f = parse_stat_filter("500").unwrap();
+        assert!(f(500));
+        assert!(f(600));
+        assert!(!f(499));
+    }
+
+    #[test]
+    fn test_parse_stat_filter_invalid() {
+        assert!(parse_stat_filter("geabc").is_err());
+        assert!(parse_stat_filter("").is_err());
+    }
 }

@@ -130,7 +130,8 @@ Jobs are submitted, assigned a UUID, and processed asynchronously via `tokio::sp
 | `list-games` | List available games (version groups) |
 | `game-pokemon <game>` | List pokemon for a game (`--min-bst`, `--sort-by`, `--sort-order`, `--include-variants`) |
 | `pokedex-pokemon <pokedex>` | List pokemon from a pokedex (`--min-bst`, `--sort-by`, `--sort-order`) |
-| `pokemon <name>` | Get pokemon details (colored stat bars, types) |
+| `pokemon show <name>` | Get pokemon details (colored stat bars, types, other forms) |
+| `pokemon search [filters]` | Search pokemon by type, stats, name, game, variant type (see below) |
 | `plan-team` | Plan optimal team (`--game` (CSV) or `--pokedex` or `--pokemon`, `--min-bst`, `--top-k`, `--exclude-variant-type`) |
 | `analyze-team <names>` | Analyze type coverage |
 | `cache stats` | Show cache statistics (entry counts, sizes, location) |
