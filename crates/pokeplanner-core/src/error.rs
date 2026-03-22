@@ -14,4 +14,10 @@ pub enum AppError {
 
     #[error("Internal error: {0}")]
     Internal(String),
+
+    #[error("PokeAPI error: {0}")]
+    PokeApi(String),
+
+    #[error("Cache error: {0}")]
+    Cache(String),
 }

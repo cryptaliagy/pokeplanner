@@ -1,18 +1,19 @@
 [package]
-name = "pokeplanner-service"
+name = "pokeplanner-pokeapi"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
 pokeplanner-core = { workspace = true }
-pokeplanner-storage = { workspace = true }
-pokeplanner-pokeapi = { workspace = true }
+reqwest = { workspace = true }
+governor = { workspace = true }
+tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true }
-tracing = { workspace = true }
-uuid = { workspace = true }
 chrono = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+futures = "0.3"
 
 [dev-dependencies]
 tempfile = "3"

@@ -9,20 +9,30 @@ pokeplanner/
 ├── proto/
 │   └── pokeplanner.proto       # Protocol Buffer definitions for gRPC
 ├── crates/
-│   ├── pokeplanner-core/       # Shared types: models, errors, job types
+│   ├── pokeplanner-core/       # Shared types: models, errors, job types, team types
 │   │   └── src/
 │   │       ├── lib.rs
-│   │       ├── error.rs        # AppError enum
-│   │       ├── model.rs        # Pokemon, HealthResponse (+ inline tests)
-│   │       └── job.rs          # Job, JobStatus, JobResult (+ inline tests)
+│   │       ├── error.rs        # AppError enum (+ PokeApi, Cache variants)
+│   │       ├── model.rs        # PokemonType, BaseStats, Pokemon, HealthResponse (+ inline tests)
+│   │       ├── job.rs          # Job, JobStatus, JobKind, JobProgress, JobResult (+ inline tests)
+│   │       └── team.rs         # TeamPlanRequest, TeamSource, TeamPlan, TypeCoverage, SortField (+ inline tests)
 │   ├── pokeplanner-storage/    # Storage trait + JSON file implementation
 │   │   └── src/
 │   │       ├── lib.rs
 │   │       ├── traits.rs       # Storage trait (async, Send+Sync)
 │   │       └── json_store.rs   # JsonFileStorage implementation (+ inline tests)
+│   ├── pokeplanner-pokeapi/    # PokeAPI v2 client with caching and rate limiting
+│   │   └── src/
+│   │       ├── lib.rs          # Re-exports, VersionGroupInfo
+│   │       ├── types.rs        # PokeAPI response deserialization types (+ inline tests)
+│   │       ├── cache.rs        # DiskCache with 1-year TTL (+ inline tests)
+│   │       ├── client.rs       # PokeApiHttpClient (HTTP + cache + rate limit)
+│   │       └── traits.rs       # PokeApiClient trait, TypeEffectivenessData
 │   ├── pokeplanner-service/    # Core business logic
 │   │   └── src/
-│   │       └── lib.rs          # PokePlannerService (+ inline tests)
+│   │       ├── lib.rs          # PokePlannerService<S, P> (+ inline tests)
+│   │       ├── type_chart.rs   # TypeChart: 18x18 effectiveness matrix (+ inline tests)
+│   │       └── team_planner.rs # TeamPlanner: hybrid exact/beam search (+ inline tests)
 │   ├── pokeplanner-api-rest/   # Axum REST API server
 │   │   └── src/
 │   │       └── main.rs         # Server binary + route handlers (+ inline tests)
@@ -32,7 +42,17 @@ pokeplanner/
 │   │       └── build.rs        # Proto compilation
 │   └── pokeplanner-cli/        # CLI application
 │       └── src/
-│           └── main.rs         # Clap-based CLI
+│           └── main.rs         # Clap-based CLI with team planning commands
+├── data/
+│   ├── jobs/                   # Job state persistence (JSON files)
+│   └── cache/                  # PokeAPI response cache
+│       ├── pokemon/            # Individual pokemon responses
+│       ├── species/            # Species/varieties responses
+│       ├── pokedex/            # Pokedex entries
+│       ├── version-group/      # Version group data
+│       ├── type/               # Type effectiveness data
+│       ├── game-pokemon/       # Aggregated pokemon per game
+│       └── type-chart/         # Computed type effectiveness matrix
 ├── docs/
 │   ├── ARCHITECTURE.md         # System architecture and data flow
 │   ├── DEPENDENCIES.md         # Dependency choices and rationale

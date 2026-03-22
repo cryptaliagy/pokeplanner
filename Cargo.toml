@@ -7,6 +7,7 @@ members = [
     "crates/pokeplanner-api-rest",
     "crates/pokeplanner-api-grpc",
     "crates/pokeplanner-cli",
+    "crates/pokeplanner-pokeapi",
 ]
 
 [workspace.package]
@@ -18,6 +19,7 @@ license = "MIT"
 pokeplanner-core = { path = "crates/pokeplanner-core" }
 pokeplanner-storage = { path = "crates/pokeplanner-storage" }
 pokeplanner-service = { path = "crates/pokeplanner-service" }
+pokeplanner-pokeapi = { path = "crates/pokeplanner-pokeapi" }
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
@@ -53,3 +55,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # HTTP middleware
 tower = "0.5"
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json"] }
+
+# Rate limiting
+governor = "0.8"

@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use pokeplanner_pokeapi::PokeApiHttpClient;
 use pokeplanner_service::PokePlannerService;
 use pokeplanner_storage::JsonFileStorage;
 use tonic::{transport::Server, Request, Response, Status};
@@ -10,16 +11,21 @@ pub mod proto {
     tonic::include_proto!("pokeplanner");
 }
 
-use proto::poke_planner_service_server::{PokePlannerServiceServer, PokePlannerService as GrpcService};
+use proto::poke_planner_service_server::{
+    PokePlannerService as GrpcService, PokePlannerServiceServer,
+};
 use proto::*;
 
 pub struct GrpcHandler {
-    service: Arc<PokePlannerService<JsonFileStorage>>,
+    service: Arc<PokePlannerService<JsonFileStorage, PokeApiHttpClient>>,
 }
 
 #[tonic::async_trait]
 impl GrpcService for GrpcHandler {
-    async fn health(&self, _req: Request<HealthRequest>) -> Result<Response<HealthResponse>, Status> {
+    async fn health(
+        &self,
+        _req: Request<HealthRequest>,
+    ) -> Result<Response<HealthResponse>, Status> {
         let h = self.service.health();
         Ok(Response::new(HealthResponse {
             status: h.status,
@@ -34,38 +40,59 @@ impl GrpcService for GrpcHandler {
         }))
     }
 
-    async fn submit_job(&self, _req: Request<SubmitJobRequest>) -> Result<Response<SubmitJobResponse>, Status> {
-        let job_id = self.service.submit_job().await
+    async fn submit_job(
+        &self,
+        _req: Request<SubmitJobRequest>,
+    ) -> Result<Response<SubmitJobResponse>, Status> {
+        let job_id = self
+            .service
+            .submit_job()
+            .await
             .map_err(|e| Status::internal(e.to_string()))?;
         Ok(Response::new(SubmitJobResponse {
             job_id: job_id.to_string(),
         }))
     }
 
-    async fn get_job(&self, req: Request<GetJobRequest>) -> Result<Response<GetJobResponse>, Status> {
+    async fn get_job(
+        &self,
+        req: Request<GetJobRequest>,
+    ) -> Result<Response<GetJobResponse>, Status> {
         let job_id = Uuid::parse_str(&req.into_inner().job_id)
             .map_err(|_| Status::invalid_argument("Invalid job ID"))?;
-        let job = self.service.get_job(&job_id).await
+        let job = self
+            .service
+            .get_job(&job_id)
+            .await
             .map_err(|e| Status::not_found(e.to_string()))?;
         Ok(Response::new(GetJobResponse {
             id: job.id.to_string(),
             status: format!("{:?}", job.status),
             created_at: job.created_at.to_rfc3339(),
             updated_at: job.updated_at.to_rfc3339(),
-            result_output: job.result.map(|r| r.output),
+            result_output: job.result.map(|r| r.message),
         }))
     }
 
-    async fn list_jobs(&self, _req: Request<ListJobsRequest>) -> Result<Response<ListJobsResponse>, Status> {
-        let jobs = self.service.list_jobs().await
+    async fn list_jobs(
+        &self,
+        _req: Request<ListJobsRequest>,
+    ) -> Result<Response<ListJobsResponse>, Status> {
+        let jobs = self
+            .service
+            .list_jobs()
+            .await
             .map_err(|e| Status::internal(e.to_string()))?;
-        let jobs = jobs.into_iter().map(|job| GetJobResponse {
-            id: job.id.to_string(),
-            status: format!("{:?}", job.status),
-            created_at: job.created_at.to_rfc3339(),
-            updated_at: job.updated_at.to_rfc3339(),
-            result_output: job.result.map(|r| r.output),
-        }).collect();
+        let jobs = jobs
+            .into_iter()
+            .map(|job| GetJobResponse {
+                id: job.id.to_string(),
+                status: format!("{:?}", job.status),
+                created_at: job.created_at.to_rfc3339(),
+                updated_at: job.updated_at.to_rfc3339(),
+                result_output: job.result.map(|r| r.message),
+            })
+            .collect();
         Ok(Response::new(ListJobsResponse { jobs }))
     }
 }
@@ -81,7 +108,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .await
             .expect("Failed to initialize storage"),
     );
-    let service = Arc::new(PokePlannerService::new(storage));
+    let pokeapi = Arc::new(
+        PokeApiHttpClient::new("data/cache".into())
+            .await
+            .expect("Failed to initialize PokeAPI client"),
+    );
+    let service = Arc::new(PokePlannerService::new(storage, pokeapi));
 
     let handler = GrpcHandler { service };
     let addr = "0.0.0.0:50051".parse()?;
