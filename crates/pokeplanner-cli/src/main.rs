@@ -2,7 +2,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use clap::{Parser, Subcommand, ValueEnum};
-use pokeplanner_core::{PokemonQueryParams, SortField, SortOrder, TeamPlanRequest, TeamSource};
+use colored::Colorize;
+use pokeplanner_core::{
+    PokemonQueryParams, PokemonType, SortField, SortOrder, TeamPlanRequest, TeamSource,
+};
 use pokeplanner_pokeapi::PokeApiHttpClient;
 use pokeplanner_service::PokePlannerService;
 use pokeplanner_storage::JsonFileStorage;
@@ -370,6 +373,38 @@ fn print_pokemon_list(pokemon: &[pokeplanner_core::Pokemon]) {
     }
 }
 
+fn color_type(t: &PokemonType) -> colored::ColoredString {
+    let name = format!("{t}");
+    match t {
+        PokemonType::Fire => name.red(),
+        PokemonType::Water => name.blue(),
+        PokemonType::Grass => name.green(),
+        PokemonType::Electric => name.yellow(),
+        PokemonType::Ice => name.cyan(),
+        PokemonType::Fighting => name.truecolor(194, 46, 27),
+        PokemonType::Poison => name.purple(),
+        PokemonType::Ground => name.truecolor(226, 191, 101),
+        PokemonType::Flying => name.truecolor(169, 143, 243),
+        PokemonType::Psychic => name.truecolor(249, 85, 135),
+        PokemonType::Bug => name.truecolor(166, 185, 26),
+        PokemonType::Rock => name.truecolor(182, 161, 54),
+        PokemonType::Ghost => name.truecolor(115, 87, 151),
+        PokemonType::Dragon => name.truecolor(111, 53, 252),
+        PokemonType::Dark => name.truecolor(112, 87, 70),
+        PokemonType::Steel => name.truecolor(183, 183, 206),
+        PokemonType::Fairy => name.truecolor(214, 133, 173),
+        PokemonType::Normal => name.white(),
+    }
+}
+
+fn colored_type_list(types: &[PokemonType]) -> String {
+    types
+        .iter()
+        .map(|t| format!("{}", color_type(t)))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 fn print_team_plans(plans: &[pokeplanner_core::TeamPlan]) {
     if plans.is_empty() {
         println!("No team plans generated.");
@@ -380,26 +415,44 @@ fn print_team_plans(plans: &[pokeplanner_core::TeamPlan]) {
         let rank = i + 1;
         println!();
         println!(
-            "=== Team #{rank} (score: {:.3}, BST: {}) ===",
-            plan.score, plan.total_bst
+            "{}",
+            format!(
+                "=== Team #{rank} (score: {:.3}, BST: {}) ===",
+                plan.score, plan.total_bst
+            )
+            .bold()
         );
         println!();
 
         // Header
         println!(
             "  {:<25} {:<20} {:>5}  {:>3} {:>3} {:>3} {:>3} {:>3} {:>3}",
-            "Pokemon", "Types", "BST", "HP", "Atk", "Def", "SpA", "SpD", "Spe"
+            "Pokemon".bold(),
+            "Types".bold(),
+            "BST".bold(),
+            "HP".bold(),
+            "Atk".bold(),
+            "Def".bold(),
+            "SpA".bold(),
+            "SpD".bold(),
+            "Spe".bold(),
         );
-        println!("  {}", "-".repeat(78));
+        println!("  {}", "-".repeat(78).dimmed());
 
-        for p in &plan.team {
-            let types_str: Vec<String> = p.types.iter().map(|t| format!("{t}")).collect();
-            let variant = if !p.is_default_form { "*" } else { "" };
+        for member in &plan.team {
+            let p = &member.pokemon;
+            let types_display: Vec<String> =
+                p.types.iter().map(|t| format!("{}", color_type(t))).collect();
+            let variant = if !p.is_default_form {
+                " *".dimmed().to_string()
+            } else {
+                String::new()
+            };
             println!(
                 "  {:<25} {:<20} {:>5}  {:>3} {:>3} {:>3} {:>3} {:>3} {:>3}",
                 format!("{}{variant}", p.form_name),
-                types_str.join("/"),
-                p.bst(),
+                types_display.join("/"),
+                p.bst().to_string().bold(),
                 p.stats.hp,
                 p.stats.attack,
                 p.stats.defense,
@@ -407,34 +460,53 @@ fn print_team_plans(plans: &[pokeplanner_core::TeamPlan]) {
                 p.stats.special_defense,
                 p.stats.speed,
             );
+
+            // Per-pokemon weaknesses
+            let mut weakness_parts = Vec::new();
+            if !member.weaknesses_4x.is_empty() {
+                let list = colored_type_list(&member.weaknesses_4x);
+                weakness_parts.push(format!("{} {list}", "4x:".red().bold()));
+            }
+            if !member.weaknesses_2x.is_empty() {
+                let list = colored_type_list(&member.weaknesses_2x);
+                weakness_parts.push(format!("{} {list}", "2x:".yellow()));
+            }
+            if !weakness_parts.is_empty() {
+                println!("  {:<25} {}", "", weakness_parts.join("  "));
+            }
         }
 
         // Coverage summary
         let cov = &plan.type_coverage;
         println!();
+        let pct = cov.coverage_score * 100.0;
+        let pct_display = if pct >= 80.0 {
+            format!("{pct:.0}%").green()
+        } else if pct >= 50.0 {
+            format!("{pct:.0}%").yellow()
+        } else {
+            format!("{pct:.0}%").red()
+        };
         println!(
-            "  Offensive coverage: {:.0}% ({}/18 types)",
-            cov.coverage_score * 100.0,
+            "  {} {pct_display} ({}/18 types)",
+            "Offensive coverage:".bold(),
             cov.offensive_coverage.len()
         );
 
         if !cov.offensive_coverage.is_empty() {
-            let types: Vec<String> = cov.offensive_coverage.iter().map(|t| format!("{t}")).collect();
-            println!("    SE against: {}", types.join(", "));
+            println!("    {} {}", "SE against:".dimmed(), colored_type_list(&cov.offensive_coverage));
         }
 
         if !cov.uncovered_types.is_empty() {
-            let types: Vec<String> = cov.uncovered_types.iter().map(|t| format!("{t}")).collect();
-            println!("    No SE into: {}", types.join(", "));
+            println!("    {} {}", "No SE into:".dimmed(), colored_type_list(&cov.uncovered_types));
         }
 
         if !cov.defensive_weaknesses.is_empty() {
-            let types: Vec<String> = cov
-                .defensive_weaknesses
-                .iter()
-                .map(|t| format!("{t}"))
-                .collect();
-            println!("    Shared weaknesses: {}", types.join(", "));
+            println!(
+                "    {} {}",
+                "Shared weaknesses:".dimmed(),
+                colored_type_list(&cov.defensive_weaknesses)
+            );
         }
     }
     println!();

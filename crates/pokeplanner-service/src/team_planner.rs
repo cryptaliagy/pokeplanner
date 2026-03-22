@@ -1,4 +1,4 @@
-use pokeplanner_core::{Pokemon, PokemonType, TeamPlan, TypeCoverage};
+use pokeplanner_core::{Pokemon, PokemonType, TeamMember, TeamPlan, TypeCoverage};
 
 use crate::type_chart::TypeChart;
 
@@ -245,8 +245,20 @@ impl<'a> TeamPlanner<'a> {
             None => self.type_chart.uncovered_types(&team_types),
         };
 
+        let members = team
+            .iter()
+            .map(|p| {
+                let (w2x, w4x) = self.type_chart.pokemon_weaknesses(&p.types);
+                TeamMember {
+                    pokemon: p.clone(),
+                    weaknesses_2x: w2x,
+                    weaknesses_4x: w4x,
+                }
+            })
+            .collect();
+
         TeamPlan {
-            team: team.to_vec(),
+            team: members,
             total_bst,
             type_coverage: TypeCoverage {
                 offensive_coverage,
@@ -483,7 +495,7 @@ mod tests {
         let has_se_type = counter_result[0]
             .team
             .iter()
-            .any(|p| p.types.contains(&Grass) || p.types.contains(&Electric));
+            .any(|m| m.pokemon.types.contains(&Grass) || m.pokemon.types.contains(&Electric));
         assert!(
             has_se_type,
             "Counter team should include types SE against Water"

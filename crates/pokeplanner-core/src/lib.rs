@@ -7,5 +7,6 @@ pub use error::AppError;
 pub use job::{Job, JobId, JobKind, JobProgress, JobResult, JobStatus};
 pub use model::{BaseStats, HealthResponse, Pokemon, PokemonType};
 pub use team::{
-    PokemonQueryParams, SortField, SortOrder, TeamPlan, TeamPlanRequest, TeamSource, TypeCoverage,
+    PokemonQueryParams, SortField, SortOrder, TeamMember, TeamPlan, TeamPlanRequest, TeamSource,
+    TypeCoverage,
 };

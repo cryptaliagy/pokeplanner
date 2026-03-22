@@ -32,8 +32,15 @@ fn default_include_variants() -> bool {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TeamMember {
+    pub pokemon: Pokemon,
+    pub weaknesses_2x: Vec<PokemonType>,
+    pub weaknesses_4x: Vec<PokemonType>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TeamPlan {
-    pub team: Vec<Pokemon>,
+    pub team: Vec<TeamMember>,
     pub total_bst: u32,
     pub type_coverage: TypeCoverage,
     pub score: f64,

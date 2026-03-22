@@ -218,6 +218,22 @@ impl TypeChart {
             .product()
     }
 
+    /// Compute defensive weaknesses for a pokemon (types that deal >= multiplier).
+    /// Returns lists of (2x weaknesses, 4x weaknesses).
+    pub fn pokemon_weaknesses(&self, defender_types: &[PokemonType]) -> (Vec<PokemonType>, Vec<PokemonType>) {
+        let mut weak_2x = Vec::new();
+        let mut weak_4x = Vec::new();
+        for &atk in &PokemonType::ALL {
+            let mult = self.effectiveness_against_pokemon(atk, defender_types);
+            if mult >= 4.0 {
+                weak_4x.push(atk);
+            } else if mult >= 2.0 {
+                weak_2x.push(atk);
+            }
+        }
+        (weak_2x, weak_4x)
+    }
+
     /// Calculate offensive coverage score for a team.
     /// Returns the fraction of the 18 types that at least one team member can hit super-effectively (>= 2.0).
     pub fn team_offensive_coverage(&self, team_types: &[Vec<PokemonType>]) -> f64 {

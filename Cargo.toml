@@ -65,6 +65,9 @@ governor = "0.8"
 # Home directory resolution
 dirs = "6"
 
+# Terminal colors
+colored = "3"
+
 # Testing
 wiremock = "0.6"
 http-body-util = "0.1"
