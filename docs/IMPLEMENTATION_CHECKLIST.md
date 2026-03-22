@@ -27,6 +27,6 @@
 - [x] 4.5 CLAUDE.md updated
 
 ## Future Work
-- [ ] gRPC proto messages for new RPCs (PlanTeam, GetGamePokemon, etc.)
+- [x] gRPC proto messages for new RPCs (PlanTeam, GetGamePokemon, etc.)
 - [ ] Integration tests with mocked HTTP responses
 - [ ] Stale job recovery on startup (Running → Failed for interrupted jobs)

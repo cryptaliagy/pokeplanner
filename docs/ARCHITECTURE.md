@@ -44,7 +44,7 @@ PokePlanner is a Rust workspace organized into a layered architecture with clear
 ## Job System
 
 The job system supports long-running operations:
-1. Client submits a job via `POST /jobs` (REST) or `SubmitJob` (gRPC) or CLI
+1. Client submits a job via `POST /jobs` (REST) or `SubmitJob`/`PlanTeam` (gRPC) or CLI
 2. Service creates a `Pending` job with a `JobKind` (Generic or TeamPlan), persists it, and returns the job ID immediately
 3. A background task picks up the job, transitions it through `Running` -> `Completed`/`Failed`
 4. Job `progress` field is updated during long operations (e.g., "Fetching pokemon 47/312")
@@ -52,7 +52,7 @@ The job system supports long-running operations:
 
 ## Team Planning Flow
 
-1. User selects a source: game (version-group) or custom pokemon list
+1. User selects a source: game (version-group), pokedex, or custom pokemon list
 2. Service fetches candidate pokemon via PokeAPI (cached aggressively, 1-year TTL)
 3. Optional BST filter reduces candidates
 4. **Hybrid algorithm** selects optimal teams:

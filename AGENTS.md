@@ -114,8 +114,14 @@ Jobs are submitted, assigned a UUID, and processed asynchronously via `tokio::sp
 | `Health` | Health check |
 | `Ping` | Echo ping/pong |
 | `SubmitJob` | Submit a new job |
-| `GetJob` | Get job by ID |
+| `GetJob` | Get job by ID (includes kind, progress, result data) |
 | `ListJobs` | List all jobs |
+| `GetVersionGroups` | List available games (version groups) |
+| `GetGamePokemon` | Get pokemon for a game (supports min_bst, sort, limit, variants) |
+| `GetPokedexPokemon` | Get pokemon from a pokedex |
+| `GetPokemon` | Get single pokemon details |
+| `PlanTeam` | Submit team planning job (game/pokedex/custom source, counter-team) |
+| `AnalyzeTeam` | Synchronous type coverage analysis |
 
 ### CLI
 | Command | Description |
