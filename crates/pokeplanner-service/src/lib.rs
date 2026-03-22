@@ -454,7 +454,6 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
