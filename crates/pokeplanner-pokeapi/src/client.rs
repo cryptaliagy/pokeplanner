@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use futures::stream::{self, StreamExt};
 use governor::{Quota, RateLimiter};
-use pokeplanner_core::{AppError, BaseStats, Pokemon, PokemonType};
+use pokeplanner_core::{AppError, BaseStats, LearnMethod, LearnsetEntry, Move, Pokemon, PokemonType};
 use tracing::{debug, warn};
 
 use crate::cache::DiskCache;
@@ -504,5 +504,77 @@ impl PokeApiClient for PokeApiHttpClient {
         }
 
         Ok(data)
+    }
+
+    async fn get_pokemon_learnset(
+        &self,
+        pokemon_name: &str,
+        version_group: Option<&str>,
+        no_cache: bool,
+    ) -> Result<Vec<LearnsetEntry>, AppError> {
+        let url = format!("{}/pokemon/{pokemon_name}", self.base_url);
+        let full: PokemonFullResponse = self
+            .fetch(&url, "pokemon-full", pokemon_name, no_cache)
+            .await?;
+
+        let mut entries = Vec::new();
+        for move_entry in &full.moves {
+            for detail in &move_entry.version_group_details {
+                if let Some(vg) = version_group {
+                    if detail.version_group.name != vg {
+                        continue;
+                    }
+                }
+                let learn_method = match detail.move_learn_method.name.as_str() {
+                    "level-up" => LearnMethod::LevelUp,
+                    "machine" => LearnMethod::Machine,
+                    "egg" => LearnMethod::Egg,
+                    "tutor" => LearnMethod::Tutor,
+                    _ => LearnMethod::Other,
+                };
+                entries.push(LearnsetEntry {
+                    move_name: move_entry.move_info.name.clone(),
+                    learn_method,
+                    level: detail.level_learned_at,
+                    version_group: detail.version_group.name.clone(),
+                });
+            }
+        }
+
+        // Sort: level-up moves by level first, then alphabetically
+        entries.sort_by(|a, b| {
+            a.learn_method
+                .cmp(&b.learn_method)
+                .then(a.level.cmp(&b.level))
+                .then(a.move_name.cmp(&b.move_name))
+        });
+
+        Ok(entries)
+    }
+
+    async fn get_move(&self, move_name: &str, no_cache: bool) -> Result<Move, AppError> {
+        let url = format!("{}/move/{move_name}", self.base_url);
+        let resp: MoveResponse = self.fetch(&url, "move", move_name, no_cache).await?;
+
+        let move_type = Self::parse_pokemon_type(&resp.type_info.name)
+            .unwrap_or(PokemonType::Normal);
+
+        let effect = resp
+            .effect_entries
+            .iter()
+            .find(|e| e.language.name == "en" && !e.short_effect.is_empty())
+            .or_else(|| resp.effect_entries.iter().find(|e| !e.short_effect.is_empty()))
+            .map(|e| e.short_effect.clone());
+
+        Ok(Move {
+            name: resp.name,
+            move_type,
+            power: resp.power,
+            accuracy: resp.accuracy,
+            pp: resp.pp,
+            damage_class: resp.damage_class.name,
+            priority: resp.priority,
+            effect,
+        })
     }
 }

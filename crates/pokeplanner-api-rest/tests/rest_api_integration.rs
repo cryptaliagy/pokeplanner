@@ -146,6 +146,32 @@ impl PokeApiClient for MockPokeApi {
     async fn get_type_chart(&self, _no_cache: bool) -> Result<TypeEffectivenessData, AppError> {
         Ok(test_type_chart())
     }
+
+    async fn get_pokemon_learnset(
+        &self,
+        _pokemon_name: &str,
+        _version_group: Option<&str>,
+        _no_cache: bool,
+    ) -> Result<Vec<pokeplanner_core::LearnsetEntry>, AppError> {
+        Ok(vec![])
+    }
+
+    async fn get_move(
+        &self,
+        _move_name: &str,
+        _no_cache: bool,
+    ) -> Result<pokeplanner_core::Move, AppError> {
+        Ok(pokeplanner_core::Move {
+            name: _move_name.to_string(),
+            move_type: PokemonType::Normal,
+            power: None,
+            accuracy: None,
+            pp: None,
+            damage_class: "status".to_string(),
+            priority: 0,
+            effect: None,
+        })
+    }
 }
 
 async fn make_app() -> axum::Router {

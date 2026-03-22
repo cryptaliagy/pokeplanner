@@ -18,6 +18,8 @@ pub const CACHE_CATEGORIES: &[(&str, &str)] = &[
     ("game-pokemon", "Aggregated game pokemon lists"),
     ("pokedex-pokemon", "Aggregated pokedex pokemon lists"),
     ("type-chart", "Pre-computed type chart"),
+    ("pokemon-full", "Full pokemon data including moves"),
+    ("move", "Individual move data"),
 ];
 
 #[derive(Serialize, Deserialize)]
