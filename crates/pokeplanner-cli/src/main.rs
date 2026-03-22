@@ -21,7 +21,11 @@ fn default_data_dir() -> PathBuf {
 }
 
 #[derive(Parser)]
-#[command(name = "pokeplanner", about = "PokePlanner CLI — build optimal Pokemon teams", version)]
+#[command(
+    name = "pokeplanner",
+    about = "PokePlanner CLI — build optimal Pokemon teams",
+    version
+)]
 struct Cli {
     /// Directory for cached PokeAPI data
     #[arg(long, global = true, default_value_os_t = default_data_dir().join("cache"))]
@@ -620,9 +624,9 @@ fn parse_stat_filter(s: &str) -> anyhow::Result<Box<dyn Fn(u32) -> bool>> {
         ("ge", s)
     };
 
-    let val: u32 = val_str
-        .parse()
-        .map_err(|_| anyhow::anyhow!("Invalid stat filter value: '{val_str}' (expected a number)"))?;
+    let val: u32 = val_str.parse().map_err(|_| {
+        anyhow::anyhow!("Invalid stat filter value: '{val_str}' (expected a number)")
+    })?;
 
     Ok(match op {
         "ge" => Box::new(move |v| v >= val),
@@ -634,7 +638,10 @@ fn parse_stat_filter(s: &str) -> anyhow::Result<Box<dyn Fn(u32) -> bool>> {
     })
 }
 
-async fn handle_pokemon_action<S: pokeplanner_storage::Storage, P: pokeplanner_pokeapi::PokeApiClient>(
+async fn handle_pokemon_action<
+    S: pokeplanner_storage::Storage,
+    P: pokeplanner_pokeapi::PokeApiClient,
+>(
     action: PokemonAction,
     service: &PokePlannerService<S, P>,
     unusable: &UnusableStore,
@@ -671,17 +678,11 @@ async fn handle_pokemon_action<S: pokeplanner_storage::Storage, P: pokeplanner_p
             // Show learnset if requested
             if show_learnset {
                 let learnset = service
-                    .get_pokemon_learnset_detailed(
-                        &name,
-                        learnset_game.as_deref(),
-                        no_cache,
-                    )
+                    .get_pokemon_learnset_detailed(&name, learnset_game.as_deref(), no_cache)
                     .await?;
                 let learnset = dedup_learnset(learnset);
 
-                let game_label = learnset_game
-                    .as_deref()
-                    .unwrap_or("all games");
+                let game_label = learnset_game.as_deref().unwrap_or("all games");
                 println!();
                 println!(
                     "  {} {}",
@@ -777,7 +778,9 @@ async fn handle_pokemon_action<S: pokeplanner_storage::Storage, P: pokeplanner_p
             if let Some(ref type_names) = r#type {
                 let types: Vec<PokemonType> = type_names
                     .iter()
-                    .filter_map(|t| serde_json::from_value(serde_json::Value::String(t.to_lowercase())).ok())
+                    .filter_map(|t| {
+                        serde_json::from_value(serde_json::Value::String(t.to_lowercase())).ok()
+                    })
                     .collect();
                 if !types.is_empty() {
                     candidates.retain(|p| p.types.iter().any(|pt| types.contains(pt)));
@@ -788,7 +791,9 @@ async fn handle_pokemon_action<S: pokeplanner_storage::Storage, P: pokeplanner_p
             if let Some(ref type_names) = not_type {
                 let types: Vec<PokemonType> = type_names
                     .iter()
-                    .filter_map(|t| serde_json::from_value(serde_json::Value::String(t.to_lowercase())).ok())
+                    .filter_map(|t| {
+                        serde_json::from_value(serde_json::Value::String(t.to_lowercase())).ok()
+                    })
                     .collect();
                 if !types.is_empty() {
                     candidates.retain(|p| !p.types.iter().any(|pt| types.contains(pt)));
@@ -866,8 +871,12 @@ async fn handle_pokemon_action<S: pokeplanner_storage::Storage, P: pokeplanner_p
                         SortField::Hp => a.stats.hp.cmp(&b.stats.hp),
                         SortField::Attack => a.stats.attack.cmp(&b.stats.attack),
                         SortField::Defense => a.stats.defense.cmp(&b.stats.defense),
-                        SortField::SpecialAttack => a.stats.special_attack.cmp(&b.stats.special_attack),
-                        SortField::SpecialDefense => a.stats.special_defense.cmp(&b.stats.special_defense),
+                        SortField::SpecialAttack => {
+                            a.stats.special_attack.cmp(&b.stats.special_attack)
+                        }
+                        SortField::SpecialDefense => {
+                            a.stats.special_defense.cmp(&b.stats.special_defense)
+                        }
                         SortField::Speed => a.stats.speed.cmp(&b.stats.speed),
                         SortField::Name => a.form_name.cmp(&b.form_name),
                         SortField::PokedexNumber => a.pokedex_number.cmp(&b.pokedex_number),
@@ -889,7 +898,10 @@ async fn handle_pokemon_action<S: pokeplanner_storage::Storage, P: pokeplanner_p
     Ok(())
 }
 
-async fn handle_cache_action(action: CacheAction, cache_dir: &std::path::Path) -> anyhow::Result<()> {
+async fn handle_cache_action(
+    action: CacheAction,
+    cache_dir: &std::path::Path,
+) -> anyhow::Result<()> {
     match action {
         CacheAction::Stats => {
             let client = PokeApiHttpClient::new(cache_dir.to_path_buf()).await?;
@@ -1036,11 +1048,17 @@ async fn handle_cache_action(action: CacheAction, cache_dir: &std::path::Path) -
                 PopulateTarget::TypeChart => {
                     populate_type_chart(&client).await?;
                 }
-                PopulateTarget::Game { name, include_variants } => {
+                PopulateTarget::Game {
+                    name,
+                    include_variants,
+                } => {
                     populate_games(&client).await?;
                     populate_game_pokemon(&client, &name, include_variants).await?;
                 }
-                PopulateTarget::Pokedex { name, include_variants } => {
+                PopulateTarget::Pokedex {
+                    name,
+                    include_variants,
+                } => {
                     populate_pokedex_pokemon(&client, &name, include_variants).await?;
                 }
                 PopulateTarget::All { include_variants } => {
@@ -1113,12 +1131,10 @@ async fn populate_game_pokemon(
     };
     eprint!("  Fetching pokemon for '{game}'{variant_label}... ");
 
-    let pokemon = client.get_game_pokemon(game, false, include_variants).await?;
-    eprintln!(
-        "{} ({} pokemon)",
-        "done".green(),
-        pokemon.len(),
-    );
+    let pokemon = client
+        .get_game_pokemon(game, false, include_variants)
+        .await?;
+    eprintln!("{} ({} pokemon)", "done".green(), pokemon.len(),);
     Ok(())
 }
 
@@ -1137,11 +1153,7 @@ async fn populate_pokedex_pokemon(
     let pokemon = client
         .get_pokedex_pokemon(pokedex, false, include_variants)
         .await?;
-    eprintln!(
-        "{} ({} pokemon)",
-        "done".green(),
-        pokemon.len(),
-    );
+    eprintln!("{} ({} pokemon)", "done".green(), pokemon.len(),);
     Ok(())
 }
 
@@ -1204,7 +1216,10 @@ async fn handle_unusable_action(
     Ok(())
 }
 
-async fn handle_move_action<S: pokeplanner_storage::Storage, P: pokeplanner_pokeapi::PokeApiClient>(
+async fn handle_move_action<
+    S: pokeplanner_storage::Storage,
+    P: pokeplanner_pokeapi::PokeApiClient,
+>(
     action: MoveAction,
     service: &PokePlannerService<S, P>,
 ) -> anyhow::Result<()> {
@@ -1224,11 +1239,7 @@ async fn handle_move_action<S: pokeplanner_storage::Storage, P: pokeplanner_poke
             no_cache,
         } => {
             let learnset = service
-                .get_pokemon_learnset_detailed(
-                    &pokemon,
-                    game.as_deref(),
-                    no_cache,
-                )
+                .get_pokemon_learnset_detailed(&pokemon, game.as_deref(), no_cache)
                 .await?;
 
             let mut filtered: Vec<&pokeplanner_core::DetailedLearnsetEntry> =
@@ -1236,9 +1247,9 @@ async fn handle_move_action<S: pokeplanner_storage::Storage, P: pokeplanner_poke
 
             // Filter by type
             if let Some(ref type_name) = r#type {
-                if let Ok(t) = serde_json::from_value::<PokemonType>(
-                    serde_json::Value::String(type_name.to_lowercase()),
-                ) {
+                if let Ok(t) = serde_json::from_value::<PokemonType>(serde_json::Value::String(
+                    type_name.to_lowercase(),
+                )) {
                     filtered.retain(|e| e.move_details.move_type == t);
                 }
             }
@@ -1277,7 +1288,10 @@ async fn handle_move_action<S: pokeplanner_storage::Storage, P: pokeplanner_poke
                         .cmp(&a.move_details.accuracy.unwrap_or(0))
                 }),
                 "pp" => filtered.sort_by(|a, b| {
-                    b.move_details.pp.unwrap_or(0).cmp(&a.move_details.pp.unwrap_or(0))
+                    b.move_details
+                        .pp
+                        .unwrap_or(0)
+                        .cmp(&a.move_details.pp.unwrap_or(0))
                 }),
                 "name" => filtered.sort_by(|a, b| a.move_details.name.cmp(&b.move_details.name)),
                 _ => {
@@ -1332,10 +1346,7 @@ fn print_move_detail(m: &pokeplanner_core::Move) {
             "Accuracy: {}",
             m.accuracy.map(|a| format!("{a}%")).unwrap_or("-".into())
         ),
-        format!(
-            "PP: {}",
-            m.pp.map(|p| p.to_string()).unwrap_or("-".into())
-        ),
+        format!("PP: {}", m.pp.map(|p| p.to_string()).unwrap_or("-".into())),
     );
     if let Some(ref effect) = m.effect {
         println!();
@@ -1382,18 +1393,12 @@ fn print_learnset(entries: &[pokeplanner_core::DetailedLearnsetEntry]) {
         } else {
             "  -".to_string()
         };
-        let power = m
-            .power
-            .map(|p| format!("{p:>5}"))
-            .unwrap_or("    -".into());
+        let power = m.power.map(|p| format!("{p:>5}")).unwrap_or("    -".into());
         let acc = m
             .accuracy
             .map(|a| format!("{a:>4}%"))
             .unwrap_or("    -".into());
-        let pp = m
-            .pp
-            .map(|p| format!("{p:>4}"))
-            .unwrap_or("   -".into());
+        let pp = m.pp.map(|p| format!("{p:>4}")).unwrap_or("   -".into());
 
         // Build the type string with color but pad to fixed width
         let type_plain = format!("{}", m.move_type);
@@ -1518,8 +1523,11 @@ fn print_pokemon_list(pokemon: &[pokeplanner_core::Pokemon], unusable: &Unusable
     println!("{}", format!("{} pokemon found:", pokemon.len()).bold());
     println!();
     for p in pokemon {
-        let types_display: Vec<String> =
-            p.types.iter().map(|t| format!("{}", color_type(t))).collect();
+        let types_display: Vec<String> = p
+            .types
+            .iter()
+            .map(|t| format!("{}", color_type(t)))
+            .collect();
         let mut markers = String::new();
         if !p.is_default_form {
             markers.push_str(&" *".dimmed().to_string());
@@ -1539,23 +1547,26 @@ fn print_pokemon_list(pokemon: &[pokeplanner_core::Pokemon], unusable: &Unusable
 }
 
 fn print_pokemon_detail(p: &pokeplanner_core::Pokemon, unusable: &UnusableStore) {
-    let types_display: Vec<String> =
-        p.types.iter().map(|t| format!("{}", color_type(t))).collect();
+    let types_display: Vec<String> = p
+        .types
+        .iter()
+        .map(|t| format!("{}", color_type(t)))
+        .collect();
     let mut tags = String::new();
     if !p.is_default_form {
         tags.push_str(&" (variant)".dimmed().to_string());
     }
     if unusable.is_unusable(&p.form_name) {
-        tags.push_str(&" (unusable — excluded from team planning)".red().to_string());
+        tags.push_str(
+            &" (unusable — excluded from team planning)"
+                .red()
+                .to_string(),
+        );
     }
 
     println!();
     println!("  {} {}", p.form_name.bold(), tags);
-    println!(
-        "  #{} {}",
-        p.pokedex_number,
-        types_display.join(" / ")
-    );
+    println!("  #{} {}", p.pokedex_number, types_display.join(" / "));
     println!();
 
     // Stats with bars (max single stat is 255 for bar scaling)
@@ -1578,11 +1589,7 @@ fn print_pokemon_detail(p: &pokeplanner_core::Pokemon, unusable: &UnusableStore)
             stat_bar(*val, max, bar_w),
         );
     }
-    println!(
-        "  {} {}",
-        "BST".dimmed(),
-        p.bst().to_string().bold(),
-    );
+    println!("  {} {}", "BST".dimmed(), p.bst().to_string().bold(),);
     println!();
 }
 
@@ -1626,8 +1633,11 @@ fn print_team_plans(plans: &[pokeplanner_core::TeamPlan]) {
             // Build the types string: pad the plain text width, then colorize
             let types_plain: Vec<&str> = p.types.iter().map(|t| type_name(t)).collect();
             let types_plain_joined = types_plain.join("/");
-            let types_colored: Vec<String> =
-                p.types.iter().map(|t| format!("{}", color_type(t))).collect();
+            let types_colored: Vec<String> = p
+                .types
+                .iter()
+                .map(|t| format!("{}", color_type(t)))
+                .collect();
             let types_colored_joined = types_colored.join("/");
             // Compute how many pad chars we need to reach column width 18
             let pad_needed = 18usize.saturating_sub(types_plain_joined.len());

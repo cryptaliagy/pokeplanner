@@ -326,7 +326,11 @@ fn default_data_dir() -> PathBuf {
 }
 
 #[derive(Parser)]
-#[command(name = "pokeplanner-grpc", about = "PokePlanner gRPC API server", version)]
+#[command(
+    name = "pokeplanner-grpc",
+    about = "PokePlanner gRPC API server",
+    version
+)]
 struct Cli {
     /// Host address to bind to
     #[arg(long, default_value = "0.0.0.0")]

@@ -120,7 +120,9 @@ impl DiskCache {
         match tokio::fs::remove_file(&path).await {
             Ok(()) => Ok(true),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
-            Err(e) => Err(AppError::Cache(format!("Failed to remove {category}/{key}: {e}"))),
+            Err(e) => Err(AppError::Cache(format!(
+                "Failed to remove {category}/{key}: {e}"
+            ))),
         }
     }
 
@@ -402,7 +404,11 @@ mod tests {
         assert!(stats.total_size_bytes > 0);
         assert_eq!(stats.categories.len(), 2);
 
-        let pokemon_cat = stats.categories.iter().find(|c| c.name == "pokemon").unwrap();
+        let pokemon_cat = stats
+            .categories
+            .iter()
+            .find(|c| c.name == "pokemon")
+            .unwrap();
         assert_eq!(pokemon_cat.entries, 2);
     }
 
@@ -413,7 +419,9 @@ mod tests {
 
         // Write corrupt data to a known category
         let path = cache.cache_path("pokemon", "corrupt");
-        tokio::fs::create_dir_all(path.parent().unwrap()).await.unwrap();
+        tokio::fs::create_dir_all(path.parent().unwrap())
+            .await
+            .unwrap();
         tokio::fs::write(&path, b"not valid json").await.unwrap();
 
         // Write valid data

@@ -4,7 +4,9 @@ use std::sync::Arc;
 
 use futures::stream::{self, StreamExt};
 use governor::{Quota, RateLimiter};
-use pokeplanner_core::{AppError, BaseStats, LearnMethod, LearnsetEntry, Move, Pokemon, PokemonType};
+use pokeplanner_core::{
+    AppError, BaseStats, LearnMethod, LearnsetEntry, Move, Pokemon, PokemonType,
+};
 use tracing::{debug, warn};
 
 use crate::cache::DiskCache;
@@ -556,14 +558,18 @@ impl PokeApiClient for PokeApiHttpClient {
         let url = format!("{}/move/{move_name}", self.base_url);
         let resp: MoveResponse = self.fetch(&url, "move", move_name, no_cache).await?;
 
-        let move_type = Self::parse_pokemon_type(&resp.type_info.name)
-            .unwrap_or(PokemonType::Normal);
+        let move_type =
+            Self::parse_pokemon_type(&resp.type_info.name).unwrap_or(PokemonType::Normal);
 
         let effect = resp
             .effect_entries
             .iter()
             .find(|e| e.language.name == "en" && !e.short_effect.is_empty())
-            .or_else(|| resp.effect_entries.iter().find(|e| !e.short_effect.is_empty()))
+            .or_else(|| {
+                resp.effect_entries
+                    .iter()
+                    .find(|e| !e.short_effect.is_empty())
+            })
             .map(|e| e.short_effect.clone());
 
         Ok(Move {

@@ -826,11 +826,7 @@ mod tests {
                     534,
                     false,
                 ),
-                make_test_pokemon(
-                    "ninetales",
-                    vec![PokemonType::Fire],
-                    505,
-                ),
+                make_test_pokemon("ninetales", vec![PokemonType::Fire], 505),
                 make_test_pokemon_variant(
                     "ninetales",
                     "ninetales-alola",
@@ -902,7 +898,11 @@ mod tests {
     #[tokio::test]
     async fn test_exclude_variant_types_filters_megas() {
         let dir = tempfile::tempdir().unwrap();
-        let storage = Arc::new(JsonFileStorage::new(dir.path().to_path_buf()).await.unwrap());
+        let storage = Arc::new(
+            JsonFileStorage::new(dir.path().to_path_buf())
+                .await
+                .unwrap(),
+        );
         let pokeapi = Arc::new(MockPokeApiWithVariants);
         let svc = PokePlannerService::new(storage, pokeapi);
 
@@ -956,7 +956,11 @@ mod tests {
     #[tokio::test]
     async fn test_exclude_variant_types_multiple() {
         let dir = tempfile::tempdir().unwrap();
-        let storage = Arc::new(JsonFileStorage::new(dir.path().to_path_buf()).await.unwrap());
+        let storage = Arc::new(
+            JsonFileStorage::new(dir.path().to_path_buf())
+                .await
+                .unwrap(),
+        );
         let pokeapi = Arc::new(MockPokeApiWithVariants);
         let svc = PokePlannerService::new(storage, pokeapi);
 
@@ -970,7 +974,11 @@ mod tests {
             include_variants: true,
             exclude: Vec::new(),
             exclude_species: Vec::new(),
-            exclude_variant_types: vec!["mega".to_string(), "gmax".to_string(), "alola".to_string()],
+            exclude_variant_types: vec![
+                "mega".to_string(),
+                "gmax".to_string(),
+                "alola".to_string(),
+            ],
             counter_team: None,
         };
 
@@ -991,7 +999,9 @@ mod tests {
                         .collect();
                     for name in &all_members {
                         assert!(
-                            !name.contains("mega") && !name.contains("gmax") && !name.contains("alola"),
+                            !name.contains("mega")
+                                && !name.contains("gmax")
+                                && !name.contains("alola"),
                             "variant should be excluded, got: {name}"
                         );
                     }
