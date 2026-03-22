@@ -318,6 +318,29 @@ async fn main() -> anyhow::Result<()> {
 // Display helpers
 // ---------------------------------------------------------------------------
 
+fn type_name(t: &PokemonType) -> &'static str {
+    match t {
+        PokemonType::Normal => "normal",
+        PokemonType::Fire => "fire",
+        PokemonType::Water => "water",
+        PokemonType::Electric => "electric",
+        PokemonType::Grass => "grass",
+        PokemonType::Ice => "ice",
+        PokemonType::Fighting => "fighting",
+        PokemonType::Poison => "poison",
+        PokemonType::Ground => "ground",
+        PokemonType::Flying => "flying",
+        PokemonType::Psychic => "psychic",
+        PokemonType::Bug => "bug",
+        PokemonType::Rock => "rock",
+        PokemonType::Ghost => "ghost",
+        PokemonType::Dragon => "dragon",
+        PokemonType::Dark => "dark",
+        PokemonType::Steel => "steel",
+        PokemonType::Fairy => "fairy",
+    }
+}
+
 fn color_type(t: &PokemonType) -> colored::ColoredString {
     let name = format!("{t}");
     match t {
@@ -463,34 +486,44 @@ fn print_team_plans(plans: &[pokeplanner_core::TeamPlan]) {
         );
         println!();
 
-        // Header
+        // Header — pad plain text first, then apply bold
         println!(
-            "  {:<25} {:<20} {:>5}  {:>3} {:>3} {:>3} {:>3} {:>3} {:>3}",
-            "Pokemon".bold(),
-            "Types".bold(),
-            "BST".bold(),
-            "HP".bold(),
-            "Atk".bold(),
-            "Def".bold(),
-            "SpA".bold(),
-            "SpD".bold(),
-            "Spe".bold(),
+            "  {}  {}  {}  {}  {}  {}  {}  {}  {}",
+            format!("{:<22}", "Pokemon").bold(),
+            format!("{:<18}", "Types").bold(),
+            format!("{:>5}", "BST").bold(),
+            format!("{:>3}", "HP").bold(),
+            format!("{:>3}", "Atk").bold(),
+            format!("{:>3}", "Def").bold(),
+            format!("{:>3}", "SpA").bold(),
+            format!("{:>3}", "SpD").bold(),
+            format!("{:>3}", "Spe").bold(),
         );
         println!("  {}", "-".repeat(78).dimmed());
 
         for member in &plan.team {
             let p = &member.pokemon;
-            let types_display: Vec<String> =
+
+            // Build the types string: pad the plain text width, then colorize
+            let types_plain: Vec<&str> = p.types.iter().map(|t| type_name(t)).collect();
+            let types_plain_joined = types_plain.join("/");
+            let types_colored: Vec<String> =
                 p.types.iter().map(|t| format!("{}", color_type(t))).collect();
-            let variant = if !p.is_default_form {
-                " *".dimmed().to_string()
+            let types_colored_joined = types_colored.join("/");
+            // Compute how many pad chars we need to reach column width 18
+            let pad_needed = 18usize.saturating_sub(types_plain_joined.len());
+            let types_padded = format!("{types_colored_joined}{}", " ".repeat(pad_needed));
+
+            let name_display = if p.is_default_form {
+                p.form_name.clone()
             } else {
-                String::new()
+                format!("{} *", p.form_name)
             };
+
             println!(
-                "  {:<25} {:<20} {:>5}  {:>3} {:>3} {:>3} {:>3} {:>3} {:>3}",
-                format!("{}{variant}", p.form_name),
-                types_display.join("/"),
+                "  {:<22}  {}  {:>5}  {:>3}  {:>3}  {:>3}  {:>3}  {:>3}  {:>3}",
+                name_display,
+                types_padded,
                 p.bst().to_string().bold(),
                 p.stats.hp,
                 p.stats.attack,
