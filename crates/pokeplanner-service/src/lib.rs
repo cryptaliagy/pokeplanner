@@ -135,6 +135,17 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
         self.pokeapi.get_pokemon(name, no_cache).await
     }
 
+    /// Get all forms/varieties for a species (base, mega, regional, etc.).
+    pub async fn get_species_varieties(
+        &self,
+        species_name: &str,
+        no_cache: bool,
+    ) -> Result<Vec<Pokemon>, AppError> {
+        self.pokeapi
+            .get_species_varieties(species_name, no_cache)
+            .await
+    }
+
     /// Submit a team planning job. Returns the job ID immediately.
     pub async fn submit_team_plan(&self, request: TeamPlanRequest) -> Result<JobId, AppError> {
         let job = Job::with_kind(JobKind::TeamPlan(request.clone()));

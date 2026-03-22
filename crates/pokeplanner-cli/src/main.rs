@@ -51,8 +51,9 @@ enum Commands {
         sort_order: CliSortOrder,
         #[arg(long)]
         no_cache: bool,
+        /// Exclude alternate forms (megas, regional variants, etc.)
         #[arg(long)]
-        include_variants: bool,
+        exclude_variants: bool,
         /// Limit number of results (useful with --sort-by for "top N")
         #[arg(long)]
         limit: Option<usize>,
@@ -69,8 +70,9 @@ enum Commands {
         sort_order: CliSortOrder,
         #[arg(long)]
         no_cache: bool,
+        /// Exclude alternate forms (megas, regional variants, etc.)
         #[arg(long)]
-        include_variants: bool,
+        exclude_variants: bool,
         /// Limit number of results (useful with --sort-by for "top N")
         #[arg(long)]
         limit: Option<usize>,
@@ -99,8 +101,9 @@ enum Commands {
         top_k: usize,
         #[arg(long)]
         no_cache: bool,
+        /// Exclude alternate forms (megas, regional variants, etc.)
         #[arg(long)]
-        include_variants: bool,
+        exclude_variants: bool,
         /// Enemy pokemon to counter (comma-separated). Optimizes team against this specific team.
         #[arg(long, value_delimiter = ',')]
         counter: Option<Vec<String>>,
@@ -189,7 +192,7 @@ async fn main() -> anyhow::Result<()> {
             sort_by,
             sort_order,
             no_cache,
-            include_variants,
+            exclude_variants,
             limit,
         } => {
             let pokemon = service
@@ -200,7 +203,7 @@ async fn main() -> anyhow::Result<()> {
                         no_cache,
                         sort_by: sort_by.map(SortField::from),
                         sort_order: sort_order.into(),
-                        include_variants,
+                        include_variants: !exclude_variants,
                         limit,
                     },
                 )
@@ -213,7 +216,7 @@ async fn main() -> anyhow::Result<()> {
             sort_by,
             sort_order,
             no_cache,
-            include_variants,
+            exclude_variants,
             limit,
         } => {
             let pokemon = service
@@ -224,7 +227,7 @@ async fn main() -> anyhow::Result<()> {
                         no_cache,
                         sort_by: sort_by.map(SortField::from),
                         sort_order: sort_order.into(),
-                        include_variants,
+                        include_variants: !exclude_variants,
                         limit,
                     },
                 )
@@ -234,6 +237,33 @@ async fn main() -> anyhow::Result<()> {
         Commands::Pokemon { name, no_cache } => {
             let pokemon = service.get_pokemon(&name, no_cache).await?;
             print_pokemon_detail(&pokemon);
+
+            // Show other forms/varieties of this species
+            let varieties = service
+                .get_species_varieties(&pokemon.species_name, no_cache)
+                .await?;
+            let others: Vec<&pokeplanner_core::Pokemon> = varieties
+                .iter()
+                .filter(|v| v.form_name != pokemon.form_name)
+                .collect();
+            if !others.is_empty() {
+                println!(
+                    "  {} {}",
+                    "Other forms:".bold(),
+                    format!("({} total)", varieties.len()).dimmed(),
+                );
+                for v in &others {
+                    let types_display: Vec<String> =
+                        v.types.iter().map(|t| format!("{}", color_type(t))).collect();
+                    println!(
+                        "    {:<25} {}  BST: {}",
+                        v.form_name,
+                        types_display.join("/"),
+                        v.bst().to_string().bold(),
+                    );
+                }
+                println!();
+            }
         }
         Commands::PlanTeam {
             game,
@@ -242,7 +272,7 @@ async fn main() -> anyhow::Result<()> {
             min_bst,
             top_k,
             no_cache,
-            include_variants,
+            exclude_variants,
             counter,
         } => {
             let source = if let Some(games) = game {
@@ -264,7 +294,7 @@ async fn main() -> anyhow::Result<()> {
                 min_bst,
                 no_cache,
                 top_k: Some(top_k),
-                include_variants,
+                include_variants: !exclude_variants,
                 counter_team: counter,
             };
 
