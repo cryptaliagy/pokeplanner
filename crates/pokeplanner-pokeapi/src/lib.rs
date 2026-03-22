@@ -3,6 +3,7 @@ pub mod client;
 pub mod traits;
 pub mod types;
 
+pub use cache::{CacheStats, CategoryStats, DiskCache, CACHE_CATEGORIES};
 pub use client::{PokeApiClientConfig, PokeApiHttpClient};
 pub use traits::{PokeApiClient, TypeEffectivenessData, TypeEffectivenessEntry};
 

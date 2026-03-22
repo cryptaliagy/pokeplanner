@@ -31,7 +31,7 @@
 
 ## Architecture Quick Reference
 
-- **Core types**: `crates/pokeplanner-core/` — shared models, errors, job types, team types
+- **Core types**: `crates/pokeplanner-core/` — shared models (Pokemon, Move, LearnsetEntry, DetailedLearnsetEntry), errors, job types, team types
 - **Storage**: `crates/pokeplanner-storage/` — `Storage` trait + `JsonFileStorage`
 - **PokeAPI Client**: `crates/pokeplanner-pokeapi/` — `PokeApiClient` trait + `PokeApiHttpClient` with disk cache and rate limiting
 - **Service**: `crates/pokeplanner-service/` — business logic, job orchestration, team planner, type chart
@@ -130,9 +130,28 @@ Jobs are submitted, assigned a UUID, and processed asynchronously via `tokio::sp
 | `list-games` | List available games (version groups) |
 | `game-pokemon <game>` | List pokemon for a game (`--min-bst`, `--sort-by`, `--sort-order`, `--include-variants`) |
 | `pokedex-pokemon <pokedex>` | List pokemon from a pokedex (`--min-bst`, `--sort-by`, `--sort-order`) |
-| `pokemon <name>` | Get pokemon details (colored stat bars, types) |
+| `pokemon show <name>` | Get pokemon details (colored stat bars, types, other forms) (`--show-learnset`, `--learnset-game`) |
+| `pokemon search [filters]` | Search pokemon by type, stats, name, game, variant type (see below) |
+| `moves show <name>` | Get detailed move info (type, power, accuracy, pp, effect) |
+| `moves search <pokemon>` | Search a pokemon's learnset (`--game`, `--type`, `--damage-class`, `--min-power`, `--learn-method`, `--sort-by`) |
 | `plan-team` | Plan optimal team (`--game` (CSV) or `--pokedex` or `--pokemon`, `--min-bst`, `--top-k`, `--exclude-variant-type`) |
 | `analyze-team <names>` | Analyze type coverage |
+| `cache stats` | Show cache statistics (entry counts, sizes, location) |
+| `cache populate games` | Pre-fetch all version group metadata |
+| `cache populate type-chart` | Pre-fetch the type effectiveness chart |
+| `cache populate game <name>` | Pre-fetch all pokemon for a game (`--include-variants`) |
+| `cache populate pokedex <name>` | Pre-fetch all pokemon from a pokedex (`--include-variants`) |
+| `cache populate all` | Pre-fetch everything (`--include-variants`); uses lower concurrency (3 req, 5 rps) |
+| `cache clear all` | Remove all cached data |
+| `cache clear stale` | Remove only expired entries |
+| `cache clear game <name>` | Remove cached data for a game |
+| `cache clear pokedex <name>` | Remove cached data for a pokedex |
+| `cache clear pokemon <name>` | Remove cached data for a pokemon |
+| `cache clear type-chart` | Remove the cached type chart |
+| `unusable add <names>` | Mark pokemon as unusable (comma-separated form names) |
+| `unusable remove <names>` | Unmark pokemon as unusable |
+| `unusable list` | List all pokemon marked as unusable |
+| `unusable clear` | Clear the entire unusable list |
 
 ## Testing
 

@@ -76,6 +76,56 @@ pub struct PokemonResponse {
     pub species: NamedApiResource,
 }
 
+// --- Pokemon (full, with moves for learnset queries) ---
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PokemonMoveVersionDetail {
+    pub level_learned_at: u32,
+    pub version_group: NamedApiResource,
+    pub move_learn_method: NamedApiResource,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PokemonMoveEntry {
+    #[serde(rename = "move")]
+    pub move_info: NamedApiResource,
+    pub version_group_details: Vec<PokemonMoveVersionDetail>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PokemonFullResponse {
+    pub id: u32,
+    pub name: String,
+    pub stats: Vec<PokemonStatEntry>,
+    pub types: Vec<PokemonTypeSlot>,
+    pub species: NamedApiResource,
+    pub moves: Vec<PokemonMoveEntry>,
+}
+
+// --- Move ---
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MoveEffectEntry {
+    pub effect: String,
+    pub short_effect: String,
+    pub language: NamedApiResource,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MoveResponse {
+    pub id: u32,
+    pub name: String,
+    #[serde(rename = "type")]
+    pub type_info: NamedApiResource,
+    pub power: Option<u32>,
+    pub accuracy: Option<u32>,
+    pub pp: Option<u32>,
+    pub damage_class: NamedApiResource,
+    pub priority: i32,
+    #[serde(default)]
+    pub effect_entries: Vec<MoveEffectEntry>,
+}
+
 // --- Type ---
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
