@@ -356,6 +356,17 @@ enum ClearTarget {
     },
     /// Remove the cached type chart
     TypeChart,
+    /// Remove cached learnset data (for a specific pokemon or all)
+    Learnset {
+        /// Pokemon form name (omit to clear all learnset data)
+        name: Option<String>,
+    },
+    /// Remove cached move data (for a specific move or all)
+    #[command(name = "moves")]
+    Moves {
+        /// Move name (omit to clear all move data)
+        name: Option<String>,
+    },
 }
 
 #[derive(Clone, ValueEnum)]
@@ -666,6 +677,7 @@ async fn handle_pokemon_action<S: pokeplanner_storage::Storage, P: pokeplanner_p
                         no_cache,
                     )
                     .await?;
+                let learnset = dedup_learnset(learnset);
 
                 let game_label = learnset_game
                     .as_deref()
@@ -980,6 +992,38 @@ async fn handle_cache_action(action: CacheAction, cache_dir: &std::path::Path) -
                         println!("No type chart data cached.");
                     }
                 }
+                ClearTarget::Learnset { name } => {
+                    if let Some(pokemon_name) = name {
+                        if cache.remove("pokemon-full", &pokemon_name).await? {
+                            println!("Cleared learnset cache for '{pokemon_name}'.");
+                        } else {
+                            println!("No learnset data cached for '{pokemon_name}'.");
+                        }
+                    } else {
+                        let count = cache.clear_category("pokemon-full").await?;
+                        if count > 0 {
+                            println!("Cleared all learnset cache ({count} entries).");
+                        } else {
+                            println!("No learnset data cached.");
+                        }
+                    }
+                }
+                ClearTarget::Moves { name } => {
+                    if let Some(move_name) = name {
+                        if cache.remove("move", &move_name).await? {
+                            println!("Cleared cache for move '{move_name}'.");
+                        } else {
+                            println!("No cached data for move '{move_name}'.");
+                        }
+                    } else {
+                        let count = cache.clear_category("move").await?;
+                        if count > 0 {
+                            println!("Cleared all move cache ({count} entries).");
+                        } else {
+                            println!("No move data cached.");
+                        }
+                    }
+                }
             }
         }
         CacheAction::Populate { target } => {
@@ -1247,17 +1291,18 @@ async fn handle_move_action<S: pokeplanner_storage::Storage, P: pokeplanner_poke
                 }
             }
 
+            // Deduplicate and convert to owned for print
+            let owned: Vec<pokeplanner_core::DetailedLearnsetEntry> =
+                filtered.into_iter().cloned().collect();
+            let owned = dedup_learnset(owned);
+
             let game_label = game.as_deref().unwrap_or("all games");
             println!(
                 "{} {} {}",
-                format!("{} moves found", filtered.len()).bold(),
+                format!("{} moves found", owned.len()).bold(),
                 format!("for {pokemon}").dimmed(),
                 format!("({game_label})").dimmed(),
             );
-
-            // Convert to owned for print
-            let owned: Vec<pokeplanner_core::DetailedLearnsetEntry> =
-                filtered.into_iter().cloned().collect();
             print_learnset(&owned);
         }
     }
@@ -1297,6 +1342,18 @@ fn print_move_detail(m: &pokeplanner_core::Move) {
         println!("  {}", effect.dimmed());
     }
     println!();
+}
+
+/// Deduplicate learnset entries by move name, keeping the first occurrence
+/// (best learn method due to sorting order: level-up before machine).
+fn dedup_learnset(
+    entries: Vec<pokeplanner_core::DetailedLearnsetEntry>,
+) -> Vec<pokeplanner_core::DetailedLearnsetEntry> {
+    let mut seen = std::collections::HashSet::new();
+    entries
+        .into_iter()
+        .filter(|e| seen.insert(e.move_details.name.clone()))
+        .collect()
 }
 
 fn print_learnset(entries: &[pokeplanner_core::DetailedLearnsetEntry]) {
