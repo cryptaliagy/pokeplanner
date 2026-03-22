@@ -8,7 +8,15 @@ service PokePlannerService {
   rpc SubmitJob (SubmitJobRequest) returns (SubmitJobResponse);
   rpc GetJob (GetJobRequest) returns (GetJobResponse);
   rpc ListJobs (ListJobsRequest) returns (ListJobsResponse);
+  rpc GetVersionGroups (GetVersionGroupsRequest) returns (GetVersionGroupsResponse);
+  rpc GetGamePokemon (GetGamePokemonRequest) returns (GetGamePokemonResponse);
+  rpc GetPokedexPokemon (GetPokedexPokemonRequest) returns (GetPokedexPokemonResponse);
+  rpc GetPokemon (GetPokemonRequest) returns (GetPokemonResponse);
+  rpc PlanTeam (PlanTeamRequest) returns (PlanTeamResponse);
+  rpc AnalyzeTeam (AnalyzeTeamRequest) returns (AnalyzeTeamResponse);
 }
+
+// --- Common types ---
 
 message HealthRequest {}
 
@@ -25,6 +33,34 @@ message PingResponse {
   string message = 1;
 }
 
+message BaseStats {
+  uint32 hp = 1;
+  uint32 attack = 2;
+  uint32 defense = 3;
+  uint32 special_attack = 4;
+  uint32 special_defense = 5;
+  uint32 speed = 6;
+}
+
+message Pokemon {
+  string species_name = 1;
+  string form_name = 2;
+  uint32 pokedex_number = 3;
+  repeated string types = 4;
+  BaseStats stats = 5;
+  bool is_default_form = 6;
+  uint32 bst = 7;
+}
+
+message TypeCoverage {
+  repeated string offensive_coverage = 1;
+  repeated string defensive_weaknesses = 2;
+  repeated string uncovered_types = 3;
+  double coverage_score = 4;
+}
+
+// --- Job messages ---
+
 message SubmitJobRequest {}
 
 message SubmitJobResponse {
@@ -35,16 +71,141 @@ message GetJobRequest {
   string job_id = 1;
 }
 
+message JobProgress {
+  string phase = 1;
+  uint32 completed_steps = 2;
+  uint32 total_steps = 3;
+}
+
 message GetJobResponse {
   string id = 1;
   string status = 2;
-  string created_at = 3;
-  string updated_at = 4;
-  optional string result_output = 5;
+  string kind = 3;
+  string created_at = 4;
+  string updated_at = 5;
+  optional string result_message = 6;
+  optional string result_data = 7;
+  optional JobProgress progress = 8;
 }
 
 message ListJobsRequest {}
 
 message ListJobsResponse {
   repeated GetJobResponse jobs = 1;
+}
+
+// --- Version groups ---
+
+message GetVersionGroupsRequest {
+  bool no_cache = 1;
+}
+
+message VersionGroupInfo {
+  string name = 1;
+  repeated string versions = 2;
+  repeated string pokedexes = 3;
+}
+
+message GetVersionGroupsResponse {
+  repeated VersionGroupInfo version_groups = 1;
+}
+
+// --- Game pokemon ---
+
+enum SortField {
+  SORT_FIELD_BST = 0;
+  SORT_FIELD_HP = 1;
+  SORT_FIELD_ATTACK = 2;
+  SORT_FIELD_DEFENSE = 3;
+  SORT_FIELD_SPECIAL_ATTACK = 4;
+  SORT_FIELD_SPECIAL_DEFENSE = 5;
+  SORT_FIELD_SPEED = 6;
+  SORT_FIELD_NAME = 7;
+  SORT_FIELD_POKEDEX_NUMBER = 8;
+}
+
+enum SortOrder {
+  SORT_ORDER_ASC = 0;
+  SORT_ORDER_DESC = 1;
+}
+
+message GetGamePokemonRequest {
+  string version_group = 1;
+  optional uint32 min_bst = 2;
+  bool no_cache = 3;
+  SortField sort_by = 4;
+  SortOrder sort_order = 5;
+  bool include_variants = 6;
+  optional uint32 limit = 7;
+}
+
+message GetGamePokemonResponse {
+  repeated Pokemon pokemon = 1;
+  uint32 count = 2;
+}
+
+// --- Pokedex pokemon ---
+
+message GetPokedexPokemonRequest {
+  string pokedex_name = 1;
+  optional uint32 min_bst = 2;
+  bool no_cache = 3;
+  SortField sort_by = 4;
+  SortOrder sort_order = 5;
+  bool include_variants = 6;
+  optional uint32 limit = 7;
+}
+
+message GetPokedexPokemonResponse {
+  repeated Pokemon pokemon = 1;
+  uint32 count = 2;
+}
+
+// --- Single pokemon ---
+
+message GetPokemonRequest {
+  string name = 1;
+  bool no_cache = 2;
+}
+
+message GetPokemonResponse {
+  Pokemon pokemon = 1;
+}
+
+// --- Team planning ---
+
+message TeamSource {
+  oneof source {
+    string game = 1;
+    string pokedex = 2;
+    CustomPokemonList custom = 3;
+  }
+}
+
+message CustomPokemonList {
+  repeated string pokemon_names = 1;
+}
+
+message PlanTeamRequest {
+  TeamSource source = 1;
+  optional uint32 min_bst = 2;
+  bool no_cache = 3;
+  optional uint32 top_k = 4;
+  bool include_variants = 5;
+  repeated string counter_team = 6;
+}
+
+message PlanTeamResponse {
+  string job_id = 1;
+}
+
+// --- Team analysis ---
+
+message AnalyzeTeamRequest {
+  repeated string pokemon_names = 1;
+  bool no_cache = 2;
+}
+
+message AnalyzeTeamResponse {
+  TypeCoverage coverage = 1;
 }
