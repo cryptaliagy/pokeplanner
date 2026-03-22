@@ -5,7 +5,7 @@ use crate::model::{Pokemon, PokemonType};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum TeamSource {
-    Game { version_group: String },
+    Game { version_groups: Vec<String> },
     Pokedex { pokedex_name: String },
     Custom { pokemon_names: Vec<String> },
 }
@@ -88,12 +88,29 @@ mod tests {
     #[test]
     fn test_team_source_game_serde() {
         let source = TeamSource::Game {
-            version_group: "scarlet-violet".to_string(),
+            version_groups: vec!["scarlet-violet".to_string()],
         };
         let json = serde_json::to_string(&source).unwrap();
         let deserialized: TeamSource = serde_json::from_str(&json).unwrap();
         match deserialized {
-            TeamSource::Game { version_group } => assert_eq!(version_group, "scarlet-violet"),
+            TeamSource::Game { version_groups } => {
+                assert_eq!(version_groups, vec!["scarlet-violet"])
+            }
+            _ => panic!("expected Game variant"),
+        }
+    }
+
+    #[test]
+    fn test_team_source_multi_game_serde() {
+        let source = TeamSource::Game {
+            version_groups: vec!["red-blue".to_string(), "gold-silver".to_string()],
+        };
+        let json = serde_json::to_string(&source).unwrap();
+        let deserialized: TeamSource = serde_json::from_str(&json).unwrap();
+        match deserialized {
+            TeamSource::Game { version_groups } => {
+                assert_eq!(version_groups, vec!["red-blue", "gold-silver"])
+            }
             _ => panic!("expected Game variant"),
         }
     }
@@ -115,7 +132,7 @@ mod tests {
 
     #[test]
     fn test_team_plan_request_defaults() {
-        let json = r#"{"source":{"game":{"version_group":"red-blue"}}}"#;
+        let json = r#"{"source":{"game":{"version_groups":["red-blue"]}}}"#;
         let req: TeamPlanRequest = serde_json::from_str(json).unwrap();
         assert!(req.min_bst.is_none());
         assert!(!req.no_cache);

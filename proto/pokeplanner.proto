@@ -176,10 +176,14 @@ message GetPokemonResponse {
 
 message TeamSource {
   oneof source {
-    string game = 1;
+    GameList games = 1;
     string pokedex = 2;
     CustomPokemonList custom = 3;
   }
+}
+
+message GameList {
+  repeated string version_groups = 1;
 }
 
 message CustomPokemonList {

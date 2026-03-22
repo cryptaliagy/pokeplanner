@@ -262,7 +262,9 @@ impl GrpcService for GrpcHandler {
         let inner = req.into_inner();
         let source = match inner.source {
             Some(team_source) => match team_source.source {
-                Some(team_source::Source::Game(vg)) => TeamSource::Game { version_group: vg },
+                Some(team_source::Source::Games(list)) => TeamSource::Game {
+                    version_groups: list.version_groups,
+                },
                 Some(team_source::Source::Pokedex(name)) => {
                     TeamSource::Pokedex { pokedex_name: name }
                 }

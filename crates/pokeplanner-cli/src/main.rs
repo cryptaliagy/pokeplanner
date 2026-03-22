@@ -95,9 +95,9 @@ enum Commands {
     },
     /// Plan an optimal team
     PlanTeam {
-        /// Plan from a game's pokedex
-        #[arg(long, group = "source")]
-        game: Option<String>,
+        /// Plan from game pokedex(es), comma-separated (e.g., "red-blue" or "red-blue,gold-silver")
+        #[arg(long, group = "source", value_delimiter = ',')]
+        game: Option<Vec<String>>,
         /// Plan from a specific pokedex (e.g., "national" for global dex)
         #[arg(long, group = "source")]
         pokedex: Option<String>,
@@ -280,9 +280,9 @@ async fn main() -> anyhow::Result<()> {
             counter,
             wait,
         } => {
-            let source = if let Some(game) = game {
+            let source = if let Some(games) = game {
                 TeamSource::Game {
-                    version_group: game,
+                    version_groups: games,
                 }
             } else if let Some(pokedex_name) = pokedex {
                 TeamSource::Pokedex { pokedex_name }
@@ -325,7 +325,10 @@ async fn main() -> anyhow::Result<()> {
                             if let Some(result) = &job.result {
                                 println!("{}", result.message);
                                 if let Some(data) = &result.data {
-                                    println!("{}", serde_json::to_string_pretty(data)?);
+                                    let plans: Vec<pokeplanner_core::TeamPlan> =
+                                        serde_json::from_value(data.clone())
+                                            .unwrap_or_default();
+                                    print_team_plans(&plans);
                                 }
                             }
                             break;
@@ -365,4 +368,74 @@ fn print_pokemon_list(pokemon: &[pokeplanner_core::Pokemon]) {
             variant_marker,
         );
     }
+}
+
+fn print_team_plans(plans: &[pokeplanner_core::TeamPlan]) {
+    if plans.is_empty() {
+        println!("No team plans generated.");
+        return;
+    }
+
+    for (i, plan) in plans.iter().enumerate() {
+        let rank = i + 1;
+        println!();
+        println!(
+            "=== Team #{rank} (score: {:.3}, BST: {}) ===",
+            plan.score, plan.total_bst
+        );
+        println!();
+
+        // Header
+        println!(
+            "  {:<25} {:<20} {:>5}  {:>3} {:>3} {:>3} {:>3} {:>3} {:>3}",
+            "Pokemon", "Types", "BST", "HP", "Atk", "Def", "SpA", "SpD", "Spe"
+        );
+        println!("  {}", "-".repeat(78));
+
+        for p in &plan.team {
+            let types_str: Vec<String> = p.types.iter().map(|t| format!("{t}")).collect();
+            let variant = if !p.is_default_form { "*" } else { "" };
+            println!(
+                "  {:<25} {:<20} {:>5}  {:>3} {:>3} {:>3} {:>3} {:>3} {:>3}",
+                format!("{}{variant}", p.form_name),
+                types_str.join("/"),
+                p.bst(),
+                p.stats.hp,
+                p.stats.attack,
+                p.stats.defense,
+                p.stats.special_attack,
+                p.stats.special_defense,
+                p.stats.speed,
+            );
+        }
+
+        // Coverage summary
+        let cov = &plan.type_coverage;
+        println!();
+        println!(
+            "  Offensive coverage: {:.0}% ({}/18 types)",
+            cov.coverage_score * 100.0,
+            cov.offensive_coverage.len()
+        );
+
+        if !cov.offensive_coverage.is_empty() {
+            let types: Vec<String> = cov.offensive_coverage.iter().map(|t| format!("{t}")).collect();
+            println!("    SE against: {}", types.join(", "));
+        }
+
+        if !cov.uncovered_types.is_empty() {
+            let types: Vec<String> = cov.uncovered_types.iter().map(|t| format!("{t}")).collect();
+            println!("    No SE into: {}", types.join(", "));
+        }
+
+        if !cov.defensive_weaknesses.is_empty() {
+            let types: Vec<String> = cov
+                .defensive_weaknesses
+                .iter()
+                .map(|t| format!("{t}"))
+                .collect();
+            println!("    Shared weaknesses: {}", types.join(", "));
+        }
+    }
+    println!();
 }

@@ -255,7 +255,7 @@ async fn test_plan_team_returns_job_id() {
                 .header("content-type", "application/json")
                 .body(Body::from(
                     serde_json::to_string(&serde_json::json!({
-                        "source": {"game": {"version_group": "red-blue"}},
+                        "source": {"game": {"version_groups": ["red-blue"]}},
                         "no_cache": false,
                         "include_variants": false
                     }))

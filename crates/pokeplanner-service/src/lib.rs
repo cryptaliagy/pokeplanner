@@ -176,22 +176,33 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
 
         // Step 1: Fetch candidate pokemon
         let candidates = match &request.source {
-            TeamSource::Game { version_group } => {
-                match pokeapi
-                    .get_game_pokemon(version_group, request.no_cache, request.include_variants)
-                    .await
-                {
-                    Ok(pokemon) => pokemon,
-                    Err(e) => {
-                        Self::fail_job(
-                            &storage,
-                            &mut job,
-                            &format!("Failed to fetch game pokemon: {e}"),
-                        )
-                        .await;
-                        return;
+            TeamSource::Game { version_groups } => {
+                let mut all_pokemon = Vec::new();
+                let mut seen = std::collections::HashSet::new();
+                for vg in version_groups {
+                    match pokeapi
+                        .get_game_pokemon(vg, request.no_cache, request.include_variants)
+                        .await
+                    {
+                        Ok(pokemon) => {
+                            for p in pokemon {
+                                if seen.insert(p.form_name.clone()) {
+                                    all_pokemon.push(p);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            Self::fail_job(
+                                &storage,
+                                &mut job,
+                                &format!("Failed to fetch game pokemon for {vg}: {e}"),
+                            )
+                            .await;
+                            return;
+                        }
                     }
                 }
+                all_pokemon
             }
             TeamSource::Pokedex { pokedex_name } => {
                 match pokeapi
