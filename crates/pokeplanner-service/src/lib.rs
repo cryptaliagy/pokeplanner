@@ -146,6 +146,66 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
             .await
     }
 
+    /// Get a pokemon's learnset, optionally filtered by version group.
+    pub async fn get_pokemon_learnset(
+        &self,
+        pokemon_name: &str,
+        version_group: Option<&str>,
+        no_cache: bool,
+    ) -> Result<Vec<pokeplanner_core::LearnsetEntry>, AppError> {
+        self.pokeapi
+            .get_pokemon_learnset(pokemon_name, version_group, no_cache)
+            .await
+    }
+
+    /// Get detailed learnset with move details resolved.
+    pub async fn get_pokemon_learnset_detailed(
+        &self,
+        pokemon_name: &str,
+        version_group: Option<&str>,
+        no_cache: bool,
+    ) -> Result<Vec<pokeplanner_core::DetailedLearnsetEntry>, AppError> {
+        let learnset = self
+            .pokeapi
+            .get_pokemon_learnset(pokemon_name, version_group, no_cache)
+            .await?;
+
+        // Deduplicate move names to avoid redundant fetches
+        let unique_moves: std::collections::HashSet<String> =
+            learnset.iter().map(|e| e.move_name.clone()).collect();
+        let mut move_cache: std::collections::HashMap<String, pokeplanner_core::Move> =
+            std::collections::HashMap::new();
+        for name in unique_moves {
+            match self.pokeapi.get_move(&name, no_cache).await {
+                Ok(m) => {
+                    move_cache.insert(name, m);
+                }
+                Err(e) => warn!("Failed to fetch move {name}: {e}"),
+            }
+        }
+
+        let mut detailed = Vec::new();
+        for entry in learnset {
+            if let Some(m) = move_cache.get(&entry.move_name) {
+                detailed.push(pokeplanner_core::DetailedLearnsetEntry {
+                    move_details: m.clone(),
+                    learn_method: entry.learn_method,
+                    level: entry.level,
+                });
+            }
+        }
+        Ok(detailed)
+    }
+
+    /// Get details for a single move.
+    pub async fn get_move(
+        &self,
+        name: &str,
+        no_cache: bool,
+    ) -> Result<pokeplanner_core::Move, AppError> {
+        self.pokeapi.get_move(name, no_cache).await
+    }
+
     /// Submit a team planning job. Returns the job ID immediately.
     pub async fn submit_team_plan(&self, request: TeamPlanRequest) -> Result<JobId, AppError> {
         let job = Job::with_kind(JobKind::TeamPlan(request.clone()));
@@ -527,6 +587,32 @@ mod tests {
                 entries: Vec::new(),
             })
         }
+
+        async fn get_pokemon_learnset(
+            &self,
+            _pokemon_name: &str,
+            _version_group: Option<&str>,
+            _no_cache: bool,
+        ) -> Result<Vec<pokeplanner_core::LearnsetEntry>, AppError> {
+            Ok(vec![])
+        }
+
+        async fn get_move(
+            &self,
+            _move_name: &str,
+            _no_cache: bool,
+        ) -> Result<pokeplanner_core::Move, AppError> {
+            Ok(pokeplanner_core::Move {
+                name: _move_name.to_string(),
+                move_type: PokemonType::Normal,
+                power: None,
+                accuracy: None,
+                pp: None,
+                damage_class: "status".to_string(),
+                priority: 0,
+                effect: None,
+            })
+        }
     }
 
     fn make_test_pokemon(name: &str, types: Vec<PokemonType>, bst: u32) -> Pokemon {
@@ -783,6 +869,32 @@ mod tests {
         ) -> Result<pokeplanner_pokeapi::TypeEffectivenessData, AppError> {
             Ok(pokeplanner_pokeapi::TypeEffectivenessData {
                 entries: Vec::new(),
+            })
+        }
+
+        async fn get_pokemon_learnset(
+            &self,
+            _pokemon_name: &str,
+            _version_group: Option<&str>,
+            _no_cache: bool,
+        ) -> Result<Vec<pokeplanner_core::LearnsetEntry>, AppError> {
+            Ok(vec![])
+        }
+
+        async fn get_move(
+            &self,
+            _move_name: &str,
+            _no_cache: bool,
+        ) -> Result<pokeplanner_core::Move, AppError> {
+            Ok(pokeplanner_core::Move {
+                name: _move_name.to_string(),
+                move_type: PokemonType::Normal,
+                power: None,
+                accuracy: None,
+                pp: None,
+                damage_class: "status".to_string(),
+                priority: 0,
+                effect: None,
             })
         }
     }

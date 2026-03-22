@@ -102,6 +102,60 @@ impl Pokemon {
     }
 }
 
+/// How a pokemon learns a move.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "kebab-case")]
+pub enum LearnMethod {
+    LevelUp,
+    Machine,
+    Egg,
+    Tutor,
+    #[serde(other)]
+    Other,
+}
+
+impl std::fmt::Display for LearnMethod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LearnMethod::LevelUp => write!(f, "level-up"),
+            LearnMethod::Machine => write!(f, "machine"),
+            LearnMethod::Egg => write!(f, "egg"),
+            LearnMethod::Tutor => write!(f, "tutor"),
+            LearnMethod::Other => write!(f, "other"),
+        }
+    }
+}
+
+/// A single entry in a pokemon's learnset.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LearnsetEntry {
+    pub move_name: String,
+    pub learn_method: LearnMethod,
+    pub level: u32,
+    pub version_group: String,
+}
+
+/// Detailed move information.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Move {
+    pub name: String,
+    pub move_type: PokemonType,
+    pub power: Option<u32>,
+    pub accuracy: Option<u32>,
+    pub pp: Option<u32>,
+    pub damage_class: String,
+    pub priority: i32,
+    pub effect: Option<String>,
+}
+
+/// A learnset entry enriched with move details.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DetailedLearnsetEntry {
+    pub move_details: Move,
+    pub learn_method: LearnMethod,
+    pub level: u32,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HealthResponse {
     pub status: String,

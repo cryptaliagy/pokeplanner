@@ -131,6 +131,11 @@ enum Commands {
         #[command(subcommand)]
         action: CacheAction,
     },
+    /// Look up or search for moves
+    Moves {
+        #[command(subcommand)]
+        action: MoveAction,
+    },
     /// Manage unusable pokemon (excluded from team planning)
     Unusable {
         #[command(subcommand)]
@@ -166,6 +171,12 @@ enum PokemonAction {
         name: String,
         #[arg(long)]
         no_cache: bool,
+        /// Display the pokemon's learnset (moves it can learn)
+        #[arg(long)]
+        show_learnset: bool,
+        /// Filter learnset by game (version group name, e.g., "red-blue")
+        #[arg(long)]
+        learnset_game: Option<String>,
     },
     /// Search for pokemon matching criteria
     Search {
@@ -241,6 +252,42 @@ enum PokemonAction {
 }
 
 #[derive(Subcommand)]
+enum MoveAction {
+    /// Get details for a specific move
+    Show {
+        /// Move name (e.g., "thunderbolt", "flamethrower")
+        name: String,
+        #[arg(long)]
+        no_cache: bool,
+    },
+    /// Search a pokemon's learnset for moves matching criteria
+    Search {
+        /// Pokemon whose learnset to search
+        pokemon: String,
+        /// Filter by game (version group name)
+        #[arg(long)]
+        game: Option<String>,
+        /// Filter by move type (e.g., "fire", "water")
+        #[arg(long)]
+        r#type: Option<String>,
+        /// Filter by damage class (physical, special, status)
+        #[arg(long)]
+        damage_class: Option<String>,
+        /// Minimum power
+        #[arg(long)]
+        min_power: Option<u32>,
+        /// Filter by learn method (level-up, machine, egg, tutor)
+        #[arg(long)]
+        learn_method: Option<String>,
+        /// Sort by field (name, power, accuracy, pp, level)
+        #[arg(long, default_value = "level")]
+        sort_by: String,
+        #[arg(long)]
+        no_cache: bool,
+    },
+}
+
+#[derive(Subcommand)]
 enum CacheAction {
     /// Show cache statistics (entry counts, sizes, location)
     Stats,
@@ -309,6 +356,17 @@ enum ClearTarget {
     },
     /// Remove the cached type chart
     TypeChart,
+    /// Remove cached learnset data (for a specific pokemon or all)
+    Learnset {
+        /// Pokemon form name (omit to clear all learnset data)
+        name: Option<String>,
+    },
+    /// Remove cached move data (for a specific move or all)
+    #[command(name = "moves")]
+    Moves {
+        /// Move name (omit to clear all move data)
+        name: Option<String>,
+    },
 }
 
 #[derive(Clone, ValueEnum)]
@@ -517,6 +575,9 @@ async fn main() -> anyhow::Result<()> {
             let coverage = service.analyze_team(pokemon, no_cache).await?;
             println!("{}", serde_json::to_string_pretty(&coverage)?);
         }
+        Commands::Moves { action } => {
+            handle_move_action(action, &service).await?;
+        }
         Commands::Cache { action } => {
             handle_cache_action(action, &cache_dir).await?;
         }
@@ -579,7 +640,12 @@ async fn handle_pokemon_action<S: pokeplanner_storage::Storage, P: pokeplanner_p
     unusable: &UnusableStore,
 ) -> anyhow::Result<()> {
     match action {
-        PokemonAction::Show { name, no_cache } => {
+        PokemonAction::Show {
+            name,
+            no_cache,
+            show_learnset,
+            learnset_game,
+        } => {
             let pokemon = service.get_pokemon(&name, no_cache).await?;
             print_pokemon_detail(&pokemon, unusable);
 
@@ -600,6 +666,29 @@ async fn handle_pokemon_action<S: pokeplanner_storage::Storage, P: pokeplanner_p
                 for v in &others {
                     print_pokemon_detail(v, unusable);
                 }
+            }
+
+            // Show learnset if requested
+            if show_learnset {
+                let learnset = service
+                    .get_pokemon_learnset_detailed(
+                        &name,
+                        learnset_game.as_deref(),
+                        no_cache,
+                    )
+                    .await?;
+                let learnset = dedup_learnset(learnset);
+
+                let game_label = learnset_game
+                    .as_deref()
+                    .unwrap_or("all games");
+                println!();
+                println!(
+                    "  {} {}",
+                    "Learnset".bold(),
+                    format!("({game_label}, {} moves)", learnset.len()).dimmed(),
+                );
+                print_learnset(&learnset);
             }
         }
         PokemonAction::Search {
@@ -903,6 +992,38 @@ async fn handle_cache_action(action: CacheAction, cache_dir: &std::path::Path) -
                         println!("No type chart data cached.");
                     }
                 }
+                ClearTarget::Learnset { name } => {
+                    if let Some(pokemon_name) = name {
+                        if cache.remove("pokemon-full", &pokemon_name).await? {
+                            println!("Cleared learnset cache for '{pokemon_name}'.");
+                        } else {
+                            println!("No learnset data cached for '{pokemon_name}'.");
+                        }
+                    } else {
+                        let count = cache.clear_category("pokemon-full").await?;
+                        if count > 0 {
+                            println!("Cleared all learnset cache ({count} entries).");
+                        } else {
+                            println!("No learnset data cached.");
+                        }
+                    }
+                }
+                ClearTarget::Moves { name } => {
+                    if let Some(move_name) = name {
+                        if cache.remove("move", &move_name).await? {
+                            println!("Cleared cache for move '{move_name}'.");
+                        } else {
+                            println!("No cached data for move '{move_name}'.");
+                        }
+                    } else {
+                        let count = cache.clear_category("move").await?;
+                        if count > 0 {
+                            println!("Cleared all move cache ({count} entries).");
+                        } else {
+                            println!("No move data cached.");
+                        }
+                    }
+                }
             }
         }
         CacheAction::Populate { target } => {
@@ -1081,6 +1202,221 @@ async fn handle_unusable_action(
         }
     }
     Ok(())
+}
+
+async fn handle_move_action<S: pokeplanner_storage::Storage, P: pokeplanner_pokeapi::PokeApiClient>(
+    action: MoveAction,
+    service: &PokePlannerService<S, P>,
+) -> anyhow::Result<()> {
+    match action {
+        MoveAction::Show { name, no_cache } => {
+            let m = service.get_move(&name, no_cache).await?;
+            print_move_detail(&m);
+        }
+        MoveAction::Search {
+            pokemon,
+            game,
+            r#type,
+            damage_class,
+            min_power,
+            learn_method,
+            sort_by,
+            no_cache,
+        } => {
+            let learnset = service
+                .get_pokemon_learnset_detailed(
+                    &pokemon,
+                    game.as_deref(),
+                    no_cache,
+                )
+                .await?;
+
+            let mut filtered: Vec<&pokeplanner_core::DetailedLearnsetEntry> =
+                learnset.iter().collect();
+
+            // Filter by type
+            if let Some(ref type_name) = r#type {
+                if let Ok(t) = serde_json::from_value::<PokemonType>(
+                    serde_json::Value::String(type_name.to_lowercase()),
+                ) {
+                    filtered.retain(|e| e.move_details.move_type == t);
+                }
+            }
+
+            // Filter by damage class
+            if let Some(ref dc) = damage_class {
+                let dc_lower = dc.to_lowercase();
+                filtered.retain(|e| e.move_details.damage_class == dc_lower);
+            }
+
+            // Filter by min power
+            if let Some(min_pow) = min_power {
+                filtered.retain(|e| e.move_details.power.unwrap_or(0) >= min_pow);
+            }
+
+            // Filter by learn method
+            if let Some(ref method) = learn_method {
+                let lm: pokeplanner_core::LearnMethod =
+                    serde_json::from_value(serde_json::Value::String(method.clone()))
+                        .unwrap_or(pokeplanner_core::LearnMethod::Other);
+                filtered.retain(|e| e.learn_method == lm);
+            }
+
+            // Sort
+            match sort_by.as_str() {
+                "power" => filtered.sort_by(|a, b| {
+                    b.move_details
+                        .power
+                        .unwrap_or(0)
+                        .cmp(&a.move_details.power.unwrap_or(0))
+                }),
+                "accuracy" => filtered.sort_by(|a, b| {
+                    b.move_details
+                        .accuracy
+                        .unwrap_or(0)
+                        .cmp(&a.move_details.accuracy.unwrap_or(0))
+                }),
+                "pp" => filtered.sort_by(|a, b| {
+                    b.move_details.pp.unwrap_or(0).cmp(&a.move_details.pp.unwrap_or(0))
+                }),
+                "name" => filtered.sort_by(|a, b| a.move_details.name.cmp(&b.move_details.name)),
+                _ => {
+                    // Default: sort by learn method then level
+                    filtered.sort_by(|a, b| {
+                        a.learn_method
+                            .cmp(&b.learn_method)
+                            .then(a.level.cmp(&b.level))
+                            .then(a.move_details.name.cmp(&b.move_details.name))
+                    });
+                }
+            }
+
+            // Deduplicate and convert to owned for print
+            let owned: Vec<pokeplanner_core::DetailedLearnsetEntry> =
+                filtered.into_iter().cloned().collect();
+            let owned = dedup_learnset(owned);
+
+            let game_label = game.as_deref().unwrap_or("all games");
+            println!(
+                "{} {} {}",
+                format!("{} moves found", owned.len()).bold(),
+                format!("for {pokemon}").dimmed(),
+                format!("({game_label})").dimmed(),
+            );
+            print_learnset(&owned);
+        }
+    }
+    Ok(())
+}
+
+fn print_move_detail(m: &pokeplanner_core::Move) {
+    println!();
+    println!("  {}", m.name.bold());
+    println!(
+        "  {} {} {}",
+        format!("Type: {}", color_type(&m.move_type)),
+        format!("Class: {}", m.damage_class).dimmed(),
+        if m.priority != 0 {
+            format!("Priority: {:+}", m.priority)
+        } else {
+            String::new()
+        },
+    );
+    println!(
+        "  {} {} {}",
+        format!(
+            "Power: {}",
+            m.power.map(|p| p.to_string()).unwrap_or("-".into())
+        ),
+        format!(
+            "Accuracy: {}",
+            m.accuracy.map(|a| format!("{a}%")).unwrap_or("-".into())
+        ),
+        format!(
+            "PP: {}",
+            m.pp.map(|p| p.to_string()).unwrap_or("-".into())
+        ),
+    );
+    if let Some(ref effect) = m.effect {
+        println!();
+        println!("  {}", effect.dimmed());
+    }
+    println!();
+}
+
+/// Deduplicate learnset entries by move name, keeping the first occurrence
+/// (best learn method due to sorting order: level-up before machine).
+fn dedup_learnset(
+    entries: Vec<pokeplanner_core::DetailedLearnsetEntry>,
+) -> Vec<pokeplanner_core::DetailedLearnsetEntry> {
+    let mut seen = std::collections::HashSet::new();
+    entries
+        .into_iter()
+        .filter(|e| seen.insert(e.move_details.name.clone()))
+        .collect()
+}
+
+fn print_learnset(entries: &[pokeplanner_core::DetailedLearnsetEntry]) {
+    if entries.is_empty() {
+        println!("  {}", "(no moves found)".dimmed());
+        return;
+    }
+
+    println!();
+    println!(
+        "  {:<4} {:<22} {:<11} {:>5} {:>5} {:>4}  {}",
+        "Lvl".bold(),
+        "Move".bold(),
+        "Type".bold(),
+        "Pwr".bold(),
+        "Acc".bold(),
+        "PP".bold(),
+        "Method".bold(),
+    );
+    println!("  {}", "-".repeat(72).dimmed());
+
+    for entry in entries {
+        let m = &entry.move_details;
+        let lvl = if entry.level > 0 {
+            format!("{:>3}", entry.level)
+        } else {
+            "  -".to_string()
+        };
+        let power = m
+            .power
+            .map(|p| format!("{p:>5}"))
+            .unwrap_or("    -".into());
+        let acc = m
+            .accuracy
+            .map(|a| format!("{a:>4}%"))
+            .unwrap_or("    -".into());
+        let pp = m
+            .pp
+            .map(|p| format!("{p:>4}"))
+            .unwrap_or("   -".into());
+
+        // Build the type string with color but pad to fixed width
+        let type_plain = format!("{}", m.move_type);
+        let type_colored = format!("{}", color_type(&m.move_type));
+        let type_pad = 11usize.saturating_sub(type_plain.len());
+        let type_display = format!("{type_colored}{}", " ".repeat(type_pad));
+
+        let class_marker = match m.damage_class.as_str() {
+            "physical" => "P",
+            "special" => "S",
+            "status" => "-",
+            _ => "?",
+        };
+
+        println!(
+            "  {lvl}  {:<22} {} {power} {acc} {pp}  {} {}",
+            m.name,
+            type_display,
+            entry.learn_method,
+            class_marker.dimmed(),
+        );
+    }
+    println!();
 }
 
 fn format_bytes(bytes: u64) -> String {
