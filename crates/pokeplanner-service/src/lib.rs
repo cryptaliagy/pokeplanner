@@ -5,9 +5,8 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use pokeplanner_core::{
-    AppError, HealthResponse, Job, JobId, JobKind, JobProgress, JobResult, JobStatus, Pokemon,
-    PokemonQueryParams, PokemonType, SortField, SortOrder, TeamPlanRequest, TeamSource,
-    TypeCoverage,
+    filter_sort_limit, AppError, HealthResponse, Job, JobId, JobKind, JobProgress, JobResult,
+    JobStatus, Pokemon, PokemonQueryParams, PokemonType, TeamPlanRequest, TeamSource, TypeCoverage,
 };
 use pokeplanner_pokeapi::{PokeApiClient, VersionGroupInfo};
 use pokeplanner_storage::Storage;
@@ -430,18 +429,7 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
 
         let team_types: Vec<Vec<PokemonType>> = team.iter().map(|p| p.types.clone()).collect();
 
-        let offensive_coverage: Vec<PokemonType> = PokemonType::ALL
-            .iter()
-            .filter(|&&target| {
-                team_types.iter().any(|ptypes| {
-                    ptypes
-                        .iter()
-                        .any(|&atk| type_chart.effectiveness(atk, target) >= 2.0)
-                })
-            })
-            .copied()
-            .collect();
-
+        let offensive_coverage = type_chart.covered_types(&team_types);
         let defensive_weaknesses = type_chart.shared_weaknesses(&team_types);
         let uncovered_types = type_chart.uncovered_types(&team_types);
         let coverage_score = type_chart.team_offensive_coverage(&team_types);
@@ -466,50 +454,12 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
     }
 }
 
-fn filter_sort_limit(
-    mut pokemon: Vec<Pokemon>,
-    min_bst: Option<u32>,
-    sort_by: Option<SortField>,
-    sort_order: SortOrder,
-    limit: Option<usize>,
-) -> Vec<Pokemon> {
-    if let Some(min) = min_bst {
-        pokemon.retain(|p| p.bst() >= min);
-    }
-    if let Some(field) = sort_by {
-        sort_pokemon(&mut pokemon, field, sort_order);
-    }
-    if let Some(n) = limit {
-        pokemon.truncate(n);
-    }
-    pokemon
-}
-
-fn sort_pokemon(pokemon: &mut [Pokemon], field: SortField, order: SortOrder) {
-    pokemon.sort_by(|a, b| {
-        let cmp = match field {
-            SortField::Bst => a.bst().cmp(&b.bst()),
-            SortField::Hp => a.stats.hp.cmp(&b.stats.hp),
-            SortField::Attack => a.stats.attack.cmp(&b.stats.attack),
-            SortField::Defense => a.stats.defense.cmp(&b.stats.defense),
-            SortField::SpecialAttack => a.stats.special_attack.cmp(&b.stats.special_attack),
-            SortField::SpecialDefense => a.stats.special_defense.cmp(&b.stats.special_defense),
-            SortField::Speed => a.stats.speed.cmp(&b.stats.speed),
-            SortField::Name => a.form_name.cmp(&b.form_name),
-            SortField::PokedexNumber => a.pokedex_number.cmp(&b.pokedex_number),
-        };
-        match order {
-            SortOrder::Asc => cmp,
-            SortOrder::Desc => cmp.reverse(),
-        }
-    });
-}
 
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
 
-    use pokeplanner_core::BaseStats;
+    use pokeplanner_core::{BaseStats, SortField, SortOrder};
     use pokeplanner_storage::JsonFileStorage;
 
     use super::*;

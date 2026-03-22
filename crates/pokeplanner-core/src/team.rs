@@ -98,6 +98,47 @@ pub struct PokemonQueryParams {
     pub limit: Option<usize>,
 }
 
+/// Sort a slice of pokemon by the given field and order.
+pub fn sort_pokemon(pokemon: &mut [Pokemon], field: SortField, order: SortOrder) {
+    pokemon.sort_by(|a, b| {
+        let cmp = match field {
+            SortField::Bst => a.bst().cmp(&b.bst()),
+            SortField::Hp => a.stats.hp.cmp(&b.stats.hp),
+            SortField::Attack => a.stats.attack.cmp(&b.stats.attack),
+            SortField::Defense => a.stats.defense.cmp(&b.stats.defense),
+            SortField::SpecialAttack => a.stats.special_attack.cmp(&b.stats.special_attack),
+            SortField::SpecialDefense => a.stats.special_defense.cmp(&b.stats.special_defense),
+            SortField::Speed => a.stats.speed.cmp(&b.stats.speed),
+            SortField::Name => a.form_name.cmp(&b.form_name),
+            SortField::PokedexNumber => a.pokedex_number.cmp(&b.pokedex_number),
+        };
+        match order {
+            SortOrder::Asc => cmp,
+            SortOrder::Desc => cmp.reverse(),
+        }
+    });
+}
+
+/// Filter, sort, and limit a list of pokemon.
+pub fn filter_sort_limit(
+    mut pokemon: Vec<Pokemon>,
+    min_bst: Option<u32>,
+    sort_by: Option<SortField>,
+    sort_order: SortOrder,
+    limit: Option<usize>,
+) -> Vec<Pokemon> {
+    if let Some(min) = min_bst {
+        pokemon.retain(|p| p.bst() >= min);
+    }
+    if let Some(field) = sort_by {
+        sort_pokemon(&mut pokemon, field, sort_order);
+    }
+    if let Some(n) = limit {
+        pokemon.truncate(n);
+    }
+    pokemon
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
