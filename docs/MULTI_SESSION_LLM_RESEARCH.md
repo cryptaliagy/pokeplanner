@@ -94,13 +94,26 @@ These provide the runtime/sandbox layer but not the LLM orchestration:
 
 **OpenHands** is the most relevant here — each agent runs in a Docker sandbox, supports any LLM provider, and achieves 72% on SWE-Bench Verified. They run 32x parallel sessions for evaluation.
 
-### Tier 4: Lightweight (No Containers)
+### Tier 4: Orchestration Tools (Manage Multiple Agents)
+
+These tools don't provide isolation themselves but manage the lifecycle of multiple parallel agent sessions:
+
+| Tool | Description |
+|------|-------------|
+| **[dmux](https://github.com/anthropics/dmux)** | Node.js CLI, creates tmux panes with per-agent git worktrees; supports Claude Code, Codex, OpenCode, Gemini CLI |
+| **[cmux](https://github.com/anthropics/cmux)** | macOS-focused multi-agent manager (7.7k GitHub stars in first month, Feb 2026) |
+| **[NTM](https://github.com/anthropics/ntm)** | Named Tmux Manager — named panes, broadcast prompts, conflict detection, TUI dashboard |
+| **[agentree](https://github.com/anthropics/agentree)** | Auto-creates git worktrees per agent session |
+| **[Vibe Kanban](https://github.com/anthropics/vibe-kanban)** | Kanban board + worktree isolation + multi-agent (9.4k stars) |
+| **Superset** | Electron IDE for 10+ parallel agents |
+
+### Tier 5: Lightweight (No Containers, No Orchestrator)
 
 #### Aider
 
-- No built-in worktree support, but works in manually created worktrees
-- Supports many models (Claude, GPT-4, Gemini, local via Ollama)
-- Lightest weight option — just run multiple instances
+- No built-in worktree or multi-session support (single-threaded by design)
+- [Feature request #4428](https://github.com/aider-ai/aider/issues/4428) proposes `/spawn`, `/delegate` commands
+- Works in manually created worktrees; supports many models (Claude, GPT-4, Gemini, local via Ollama)
 
 #### Manual Worktree + Headless Claude
 
@@ -117,9 +130,42 @@ git worktree add /tmp/session-2 -b feature/task-2
 wait
 ```
 
+Or with the built-in worktree flag:
+
+```bash
+# Built-in worktree + tmux (simplest of all)
+claude -w feature-auth --tmux
+claude -w bugfix-123 --tmux
+claude -w refactor-api --tmux
+```
+
+### Claude Agent SDK (Programmatic Control)
+
+For building a custom orchestrator, the Claude Agent SDK exposes the full agent loop as a library:
+
+```typescript
+import { query } from "@anthropic-ai/claude-agent-sdk";
+
+for await (const msg of query({
+  prompt: "Add error handling to the API routes",
+  options: {
+    model: "claude-sonnet-4-20250514",
+    allowedTools: ["Read", "Edit", "Bash", "Glob"],
+    permissionMode: "acceptEdits",
+    systemPrompt: "You are a senior backend engineer.",
+  }
+})) {
+  if (msg.type === "result") console.log(msg.content);
+}
+```
+
+Key features: session forking (`forkSession`), file checkpointing with rollback, inline subagent definitions, `canUseTool` callback for fine-grained permissions, MCP tool support. A V2 preview simplifies multi-turn conversations with a `send()`/`stream()` API.
+
+Available on npm (`@anthropic-ai/claude-agent-sdk` v0.2.71) and PyPI (`claude-agent-sdk` v0.1.48).
+
 ### Practical Limits
 
-The consensus across the ecosystem is **5-7 concurrent agents on a single machine** before rate limits, merge conflict overhead at review time, and cognitive load dominate. The workflow shifts from "writer" to "reviewer" — you decompose work, launch agents, and spend time validating output.
+The consensus across the ecosystem is **5-7 concurrent agents on a single machine** before rate limits, merge conflict overhead at review time, and cognitive load dominate. The workflow shifts from "writer" to "reviewer" — you decompose work, launch agents, and spend time validating output. Teams like incident.io report 4-5 parallel instances as their default workflow; Citadel reported only a 3.1% conflict rate across 109 parallel agent waves.
 
 ---
 
