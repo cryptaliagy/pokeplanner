@@ -29,7 +29,7 @@ cargo run -p pokeplanner-cli -- list-games
 cargo run -p pokeplanner-cli -- game-pokemon red-blue
 cargo run -p pokeplanner-cli -- pokemon show charizard
 cargo run -p pokeplanner-cli -- moves search pikachu --game red-blue
-cargo run -p pokeplanner-cli -- plan-team --game red-blue --wait
+cargo run -p pokeplanner-cli -- plan-team --game red-blue
 cargo run -p pokeplanner-cli -- analyze-team charizard,blastoise,venusaur
 
 # REST API (default port 3000)
