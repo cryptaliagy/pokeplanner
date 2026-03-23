@@ -1,3 +1,4 @@
+pub mod move_selector;
 pub mod team_planner;
 pub mod type_chart;
 

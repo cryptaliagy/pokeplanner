@@ -18,6 +18,7 @@ PokePlanner is a Rust workspace organized into a layered architecture with clear
                 │    Service      │
                 │ (Business Logic)│
                 │ + Team Planner  │
+                │ + Move Selector │
                 │ + Type Chart    │
                 └───┬─────────┬───┘
                     │         │
@@ -78,6 +79,30 @@ The `/move/{name}` endpoint returns two fields used for move safety filtering:
 - **`meta.drain`** (i32): percentage of damage drained as HP. Negative = recoil (user loses HP, e.g. Flare Blitz: -33), positive = HP drain (e.g. Giga Drain: 50), 0 = neither.
 - **`meta.stat_chance`** (i32): probability that `stat_changes` apply. **0 means guaranteed** (not "never") — this is PokeAPI's convention. Values 1–99 are probabilities; ≥100 is also guaranteed. For example, Overheat has `stat_chance: 0` with `stat_changes: [{change: -2, stat: "special-attack"}]`, meaning the SpAtk drop always occurs.
 - **`stat_changes`** (array): top-level array of `{change: i32, stat: NamedApiResource}`. Only negative entries (debuffs) with guaranteed application are captured in the core `Move.self_stat_changes` field.
+
+## Move Selection Algorithm
+
+After the team planner selects a team composition, the `MoveSelector` recommends 4 optimal moves per team member. This is a post-hoc step — moves don't influence team scoring, keeping the planner fast.
+
+### Filtering criteria
+1. **Damaging only**: Moves must have `power > 0` (status moves excluded)
+2. **Uniform damage class**: All moves match the pokemon's dominant offensive stat — physical if Attack ≥ Special Attack, special otherwise
+3. **No recoil**: Moves with `drain < 0` are excluded (e.g. Flare Blitz, Brave Bird)
+4. **No self-debuffs**: Moves with non-empty `self_stat_changes` are excluded (e.g. Overheat's SpAtk -2)
+5. **Deduplication**: Same move learned via multiple methods (level-up + TM) appears once
+
+### 2 STAB + 2 Coverage allocation
+- **STAB moves** (2 slots): Moves matching the pokemon's own type(s). For dual-types, prefer one move of each type. Falls back to 2 of the same type if only one type has eligible STAB moves.
+- **Coverage moves** (2 slots): Non-STAB moves selected by greedy set-cover over the pokemon's weaknesses.
+
+### Greedy set-cover for coverage moves
+1. For each candidate, compute which uncovered weakness types it hits super-effectively (≥2.0x)
+2. Pick the move covering the most uncovered weaknesses (break ties by power)
+3. Mark those weaknesses as covered
+4. Repeat for remaining slots
+
+### Mirror-match fallback
+If all weaknesses are covered (or no coverage moves hit any weakness), remaining slots are filled with moves that are super-effective against the pokemon's own type(s). This helps in mirror matchups. If no mirror coverage is available, the highest-power remaining move is selected.
 
 ## Caching Strategy
 
