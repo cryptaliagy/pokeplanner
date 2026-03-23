@@ -302,6 +302,33 @@ async fn test_plan_team_returns_job_id() {
 }
 
 #[tokio::test]
+async fn test_plan_team_with_learnset_game_returns_job_id() {
+    let app = make_app().await;
+    let resp = app
+        .oneshot(
+            Request::post("/teams/plan")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::to_string(&serde_json::json!({
+                        "source": {"game": {"version_groups": ["red-blue"]}},
+                        "no_cache": false,
+                        "include_variants": false,
+                        "learnset_version_group": "red-blue"
+                    }))
+                    .unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::ACCEPTED);
+    let body = body_json(resp).await;
+    let job_id = body["job_id"].as_str().unwrap();
+    uuid::Uuid::parse_str(job_id).expect("job_id should be a valid UUID");
+}
+
+#[tokio::test]
 async fn test_nonexistent_job_returns_404() {
     let app = make_app().await;
     let resp = app

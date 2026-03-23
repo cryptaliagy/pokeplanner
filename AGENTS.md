@@ -45,7 +45,7 @@
 - **Core types**: `crates/pokeplanner-core/` — shared models (Pokemon, Move, MoveStatChange, LearnsetEntry, DetailedLearnsetEntry, RecommendedMove, MoveRole), errors, job types, team types
 - **Storage**: `crates/pokeplanner-storage/` — `Storage` trait + `JsonFileStorage`
 - **PokeAPI Client**: `crates/pokeplanner-pokeapi/` — `PokeApiClient` trait + `PokeApiHttpClient` with disk cache and rate limiting. `MoveResponse` includes `meta` (drain, stat_chance, etc.) and `stat_changes` fields for move safety filtering
-- **Service**: `crates/pokeplanner-service/` — business logic, job orchestration, team planner, type chart
+- **Service**: `crates/pokeplanner-service/` — business logic, job orchestration, team planner, move selector, type chart
 - **REST API**: `crates/pokeplanner-api-rest/` — Axum server on port 3000
 - **gRPC API**: `crates/pokeplanner-api-grpc/` — Tonic server on port 50051
 - **CLI**: `crates/pokeplanner-cli/` — Clap CLI (`pokeplanner` binary)
@@ -117,7 +117,7 @@ Jobs are submitted, assigned a UUID, and processed asynchronously via `tokio::sp
 | GET | `/version-groups` | List available games |
 | GET | `/version-groups/{name}/pokemon` | Get pokemon for a game (query: `min_bst`, `sort_by`, `sort_order`, `no_cache`, `include_variants`) |
 | GET | `/pokemon/{name}` | Get pokemon details |
-| POST | `/teams/plan` | Submit team planning job (body: `TeamPlanRequest`) |
+| POST | `/teams/plan` | Submit team planning job (body: `TeamPlanRequest`, optional `learnset_version_group`) |
 | POST | `/teams/analyze` | Synchronous type coverage analysis |
 
 ### gRPC (port 50051)
@@ -132,7 +132,7 @@ Jobs are submitted, assigned a UUID, and processed asynchronously via `tokio::sp
 | `GetGamePokemon` | Get pokemon for a game (supports min_bst, sort, limit, variants) |
 | `GetPokedexPokemon` | Get pokemon from a pokedex |
 | `GetPokemon` | Get single pokemon details |
-| `PlanTeam` | Submit team planning job (game/pokedex/custom source, counter-team) |
+| `PlanTeam` | Submit team planning job (game/pokedex/custom source, counter-team, `learnset_version_group`) |
 | `AnalyzeTeam` | Synchronous type coverage analysis |
 
 ### CLI
@@ -145,7 +145,7 @@ Jobs are submitted, assigned a UUID, and processed asynchronously via `tokio::sp
 | `pokemon search [filters]` | Search pokemon by type, stats, name, game, variant type (see below) |
 | `moves show <name>` | Get detailed move info (type, power, accuracy, pp, effect) |
 | `moves search <pokemon>` | Search a pokemon's learnset (`--game`, `--type`, `--damage-class`, `--min-power`, `--learn-method`, `--sort-by`) |
-| `plan-team` | Plan optimal team (`--game` (CSV) or `--pokedex` or `--pokemon`, `--min-bst`, `--top-k`, `--exclude-variant-type`) |
+| `plan-team` | Plan optimal team (`--game` (CSV) or `--pokedex` or `--pokemon`, `--min-bst`, `--top-k`, `--exclude-variant-type`, `--learnset-game`) |
 | `analyze-team <names>` | Analyze type coverage |
 | `cache stats` | Show cache statistics (entry counts, sizes, location) |
 | `cache populate games` | Pre-fetch all version group metadata |

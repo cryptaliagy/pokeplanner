@@ -57,6 +57,12 @@ pub struct TeamPlanRequest {
     /// optimizes for coverage against this specific team rather than general coverage.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub counter_team: Option<Vec<String>>,
+    /// Version group to use when fetching learnsets for move selection.
+    /// For Game sources, defaults to the first version group in the list if not set.
+    /// For Pokedex sources, auto-resolves by matching the pokedex to its version groups.
+    /// For Custom sources, move selection is skipped if not set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub learnset_version_group: Option<String>,
 }
 
 fn default_include_variants() -> bool {
@@ -251,6 +257,7 @@ mod tests {
             exclude_species: Vec::new(),
             exclude_variant_types: Vec::new(),
             counter_team: None,
+            learnset_version_group: None,
         };
         let json = serde_json::to_string(&req).unwrap();
         assert!(!json.contains("exclude_variant_types"));
@@ -333,5 +340,42 @@ mod tests {
         }"#;
         let member: TeamMember = serde_json::from_str(json).unwrap();
         assert!(member.recommended_moves.is_none());
+    }
+
+    #[test]
+    fn test_team_plan_request_learnset_version_group_serde() {
+        // Present in JSON
+        let json = r#"{"source":{"game":{"version_groups":["red-blue"]}},"learnset_version_group":"red-blue"}"#;
+        let req: TeamPlanRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.learnset_version_group, Some("red-blue".to_string()));
+
+        // Round-trip
+        let serialized = serde_json::to_string(&req).unwrap();
+        assert!(serialized.contains("learnset_version_group"));
+        let req2: TeamPlanRequest = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(req2.learnset_version_group, Some("red-blue".to_string()));
+
+        // Omitted from JSON -> defaults to None
+        let json_no_field = r#"{"source":{"game":{"version_groups":["red-blue"]}}}"#;
+        let req3: TeamPlanRequest = serde_json::from_str(json_no_field).unwrap();
+        assert!(req3.learnset_version_group.is_none());
+
+        // None -> skipped in output
+        let req4 = TeamPlanRequest {
+            source: TeamSource::Game {
+                version_groups: vec!["red-blue".to_string()],
+            },
+            min_bst: None,
+            no_cache: false,
+            top_k: None,
+            include_variants: true,
+            exclude: Vec::new(),
+            exclude_species: Vec::new(),
+            exclude_variant_types: Vec::new(),
+            counter_team: None,
+            learnset_version_group: None,
+        };
+        let json4 = serde_json::to_string(&req4).unwrap();
+        assert!(!json4.contains("learnset_version_group"));
     }
 }
