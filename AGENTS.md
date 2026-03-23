@@ -186,8 +186,8 @@ cargo test                     # Run all tests
 cargo run -p pokeplanner-cli -- hello                          # CLI hello world
 cargo run -p pokeplanner-cli -- list-games                     # List available games
 cargo run -p pokeplanner-cli -- game-pokemon red-blue          # Pokemon in Red/Blue
-cargo run -p pokeplanner-cli -- plan-team --game red-blue --wait               # Plan optimal team
-cargo run -p pokeplanner-cli -- plan-team --game red-blue,gold-silver --wait  # Plan across games
+cargo run -p pokeplanner-cli -- plan-team --game red-blue               # Plan optimal team
+cargo run -p pokeplanner-cli -- plan-team --game red-blue,gold-silver  # Plan across games
 cargo run -p pokeplanner-api-rest                              # Start REST server (--host, --port, --cache-dir, --data-dir)
 cargo run -p pokeplanner-api-grpc                              # Start gRPC server (--host, --port, --cache-dir, --data-dir)
 ```
