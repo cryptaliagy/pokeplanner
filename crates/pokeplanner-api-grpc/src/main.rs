@@ -46,6 +46,21 @@ impl GrpcHandler {
     }
 
     fn coverage_to_proto(c: &pokeplanner_core::TypeCoverage) -> TypeCoverage {
+        let (move_available, move_unavailable) = match &c.move_coverage {
+            pokeplanner_core::MoveCoverage::Available { types } => (
+                Some(MoveCoverageAvailable {
+                    types: types.iter().map(|t| t.to_string()).collect(),
+                }),
+                None,
+            ),
+            pokeplanner_core::MoveCoverage::Unavailable { version_groups } => (
+                None,
+                Some(MoveCoverageUnavailable {
+                    version_groups: version_groups.clone(),
+                }),
+            ),
+            pokeplanner_core::MoveCoverage::NotAttempted => (None, None),
+        };
         TypeCoverage {
             offensive_coverage: c.offensive_coverage.iter().map(|t| t.to_string()).collect(),
             defensive_weaknesses: c
@@ -55,6 +70,8 @@ impl GrpcHandler {
                 .collect(),
             uncovered_types: c.uncovered_types.iter().map(|t| t.to_string()).collect(),
             coverage_score: c.coverage_score,
+            move_coverage_available: move_available,
+            move_coverage_unavailable: move_unavailable,
         }
     }
 
@@ -185,6 +202,7 @@ impl GrpcService for GrpcHandler {
                 name: g.name,
                 versions: g.versions,
                 pokedexes: g.pokedexes,
+                generation: g.generation,
             })
             .collect();
         Ok(Response::new(GetVersionGroupsResponse { version_groups }))

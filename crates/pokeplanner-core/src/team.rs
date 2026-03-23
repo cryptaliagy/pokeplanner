@@ -77,6 +77,10 @@ pub struct TeamMember {
     /// Recommended moves for this team member. `None` means move analysis wasn't performed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recommended_moves: Option<Vec<RecommendedMove>>,
+    /// The version group that provided learnset data, if different from the requested one
+    /// (i.e., fallback was used).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub learnset_source_vg: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -93,6 +97,22 @@ pub struct TypeCoverage {
     pub defensive_weaknesses: Vec<PokemonType>,
     pub uncovered_types: Vec<PokemonType>,
     pub coverage_score: f64,
+    /// Move-based type coverage state.
+    #[serde(default)]
+    pub move_coverage: MoveCoverage,
+}
+
+/// Tracks whether move-based type coverage data is available and, if so, which types are covered.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum MoveCoverage {
+    /// Move selection was not attempted (e.g., Custom source with no learnset version group).
+    #[default]
+    NotAttempted,
+    /// Move selection was attempted but no learnset data was found for any team member.
+    Unavailable { version_groups: Vec<String> },
+    /// Move data was available; these types are hit super-effectively by the team's moves.
+    Available { types: Vec<PokemonType> },
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -377,5 +397,55 @@ mod tests {
         };
         let json4 = serde_json::to_string(&req4).unwrap();
         assert!(!json4.contains("learnset_version_group"));
+    }
+
+    #[test]
+    fn test_move_coverage_serde_not_attempted() {
+        let mc = MoveCoverage::NotAttempted;
+        let json = serde_json::to_string(&mc).unwrap();
+        assert!(json.contains("\"status\":\"not_attempted\""));
+        let deserialized: MoveCoverage = serde_json::from_str(&json).unwrap();
+        assert!(matches!(deserialized, MoveCoverage::NotAttempted));
+    }
+
+    #[test]
+    fn test_move_coverage_serde_unavailable() {
+        let mc = MoveCoverage::Unavailable {
+            version_groups: vec!["legends-za".to_string(), "mega-dimension".to_string()],
+        };
+        let json = serde_json::to_string(&mc).unwrap();
+        assert!(json.contains("\"status\":\"unavailable\""));
+        assert!(json.contains("legends-za"));
+        let deserialized: MoveCoverage = serde_json::from_str(&json).unwrap();
+        match deserialized {
+            MoveCoverage::Unavailable { version_groups } => {
+                assert_eq!(version_groups, vec!["legends-za", "mega-dimension"]);
+            }
+            _ => panic!("expected Unavailable variant"),
+        }
+    }
+
+    #[test]
+    fn test_move_coverage_serde_available() {
+        let mc = MoveCoverage::Available {
+            types: vec![PokemonType::Fire, PokemonType::Water],
+        };
+        let json = serde_json::to_string(&mc).unwrap();
+        assert!(json.contains("\"status\":\"available\""));
+        let deserialized: MoveCoverage = serde_json::from_str(&json).unwrap();
+        match deserialized {
+            MoveCoverage::Available { types } => {
+                assert_eq!(types, vec![PokemonType::Fire, PokemonType::Water]);
+            }
+            _ => panic!("expected Available variant"),
+        }
+    }
+
+    #[test]
+    fn test_move_coverage_default_is_not_attempted() {
+        assert!(matches!(
+            MoveCoverage::default(),
+            MoveCoverage::NotAttempted
+        ));
     }
 }

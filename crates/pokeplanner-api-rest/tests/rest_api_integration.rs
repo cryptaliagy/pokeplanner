@@ -89,6 +89,7 @@ impl PokeApiClient for MockPokeApi {
             name: "red-blue".to_string(),
             versions: vec!["red".to_string(), "blue".to_string()],
             pokedexes: vec!["kanto".to_string()],
+            generation: "generation-i".to_string(),
         }])
     }
 

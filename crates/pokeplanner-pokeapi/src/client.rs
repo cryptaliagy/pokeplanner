@@ -249,6 +249,7 @@ impl PokeApiClient for PokeApiHttpClient {
                 name: vg.name,
                 versions: vg.versions.iter().map(|v| v.name.clone()).collect(),
                 pokedexes: vg.pokedexes.iter().map(|p| p.name.clone()).collect(),
+                generation: vg.generation.name.clone(),
             });
         }
 

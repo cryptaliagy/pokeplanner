@@ -42,7 +42,7 @@
 
 ## Architecture Quick Reference
 
-- **Core types**: `crates/pokeplanner-core/` — shared models (Pokemon, Move, MoveStatChange, LearnsetEntry, DetailedLearnsetEntry, RecommendedMove, MoveRole), errors, job types, team types
+- **Core types**: `crates/pokeplanner-core/` — shared models (Pokemon, Move, MoveStatChange, LearnsetEntry, DetailedLearnsetEntry, RecommendedMove, MoveRole, MoveCoverage), errors, job types, team types
 - **Storage**: `crates/pokeplanner-storage/` — `Storage` trait + `JsonFileStorage`
 - **PokeAPI Client**: `crates/pokeplanner-pokeapi/` — `PokeApiClient` trait + `PokeApiHttpClient` with disk cache and rate limiting. `MoveResponse` includes `meta` (drain, stat_chance, etc.) and `stat_changes` fields for move safety filtering
 - **Service**: `crates/pokeplanner-service/` — business logic, job orchestration, team planner, move selector, type chart
@@ -104,6 +104,8 @@ Jobs are submitted, assigned a UUID, and processed asynchronously via `tokio::sp
 - Score = 0.4 × offensive coverage + 0.3 × defensive score + 0.3 × normalized BST
 - Configurable `top_k` (default 5)
 - v1: base type chart only (no abilities/moves)
+- **Learnset fallback chain**: When fetching moves for a pokemon, tries: (1) requested VGs, (2) sibling VGs in the same generation, (3) all VGs picking the most recent. `VersionGroupInfo` includes `generation` (e.g., "generation-ix") for this. When fallback is used, `TeamMember.learnset_source_vg` records the source.
+- **MoveCoverage enum**: `NotAttempted` | `Unavailable { version_groups }` | `Available { types }` — avoids misleading 0% when learnset data is absent
 
 ## API Endpoints
 
@@ -145,7 +147,7 @@ Jobs are submitted, assigned a UUID, and processed asynchronously via `tokio::sp
 | `pokemon search [filters]` | Search pokemon by type, stats, name, game, variant type (see below) |
 | `moves show <name>` | Get detailed move info (type, power, accuracy, pp, effect) |
 | `moves search <pokemon>` | Search a pokemon's learnset (`--game`, `--type`, `--damage-class`, `--min-power`, `--learn-method`, `--sort-by`) |
-| `plan-team` | Plan optimal team (`--game` (CSV) or `--pokedex` or `--pokemon`, `--min-bst`, `--top-k`, `--exclude-variant-type`, `--learnset-game`) |
+| `plan-team` | Plan optimal team (`--game` (CSV) or `--pokedex` or `--pokemon`, `--min-bst`, `--top-k`, `--exclude-variant-type`, `--learnset-game`). Output shows per-member moves with role annotations (STAB, ->WeaknessType, mirror), damage class, and team-level move coverage summary |
 | `analyze-team <names>` | Analyze type coverage |
 | `cache stats` | Show cache statistics (entry counts, sizes, location) |
 | `cache populate games` | Pre-fetch all version group metadata |
@@ -184,8 +186,8 @@ cargo test                     # Run all tests
 cargo run -p pokeplanner-cli -- hello                          # CLI hello world
 cargo run -p pokeplanner-cli -- list-games                     # List available games
 cargo run -p pokeplanner-cli -- game-pokemon red-blue          # Pokemon in Red/Blue
-cargo run -p pokeplanner-cli -- plan-team --game red-blue --wait               # Plan optimal team
-cargo run -p pokeplanner-cli -- plan-team --game red-blue,gold-silver --wait  # Plan across games
+cargo run -p pokeplanner-cli -- plan-team --game red-blue               # Plan optimal team
+cargo run -p pokeplanner-cli -- plan-team --game red-blue,gold-silver  # Plan across games
 cargo run -p pokeplanner-api-rest                              # Start REST server (--host, --port, --cache-dir, --data-dir)
 cargo run -p pokeplanner-api-grpc                              # Start gRPC server (--host, --port, --cache-dir, --data-dir)
 ```
