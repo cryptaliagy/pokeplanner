@@ -1,4 +1,4 @@
-use pokeplanner_core::{Pokemon, PokemonType, TeamMember, TeamPlan, TypeCoverage};
+use pokeplanner_core::{MoveCoverage, Pokemon, PokemonType, TeamMember, TeamPlan, TypeCoverage};
 
 use crate::type_chart::TypeChart;
 
@@ -254,6 +254,7 @@ impl<'a> TeamPlanner<'a> {
                     weaknesses_2x: w2x,
                     weaknesses_4x: w4x,
                     recommended_moves: None,
+                    learnset_source_vg: None,
                 }
             })
             .collect();
@@ -266,7 +267,7 @@ impl<'a> TeamPlanner<'a> {
                 defensive_weaknesses,
                 uncovered_types,
                 coverage_score: offensive_score,
-                move_coverage: None,
+                move_coverage: MoveCoverage::NotAttempted,
             },
             score,
         }

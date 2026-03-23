@@ -10,6 +10,6 @@ pub use model::{
     MoveStatChange, Pokemon, PokemonType,
 };
 pub use team::{
-    filter_sort_limit, sort_pokemon, MoveRole, PokemonQueryParams, RecommendedMove, SortField,
-    SortOrder, TeamMember, TeamPlan, TeamPlanRequest, TeamSource, TypeCoverage,
+    filter_sort_limit, sort_pokemon, MoveCoverage, MoveRole, PokemonQueryParams, RecommendedMove,
+    SortField, SortOrder, TeamMember, TeamPlan, TeamPlanRequest, TeamSource, TypeCoverage,
 };

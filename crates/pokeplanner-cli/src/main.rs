@@ -6,8 +6,8 @@ use std::sync::Arc;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use colored::Colorize;
 use pokeplanner_core::{
-    sort_pokemon, MoveRole, PokemonQueryParams, PokemonType, RecommendedMove, SortField, SortOrder,
-    TeamPlanRequest, TeamSource,
+    sort_pokemon, MoveCoverage, MoveRole, PokemonQueryParams, PokemonType, RecommendedMove,
+    SortField, SortOrder, TeamPlanRequest, TeamSource,
 };
 use pokeplanner_pokeapi::{PokeApiClientConfig, PokeApiHttpClient};
 use pokeplanner_service::PokePlannerService;
@@ -1816,6 +1816,13 @@ fn print_team_plans(plans: &[pokeplanner_core::TeamPlan]) {
                             println!("  {indent}  {line}");
                         }
                     }
+                    if let Some(ref source_vg) = member.learnset_source_vg {
+                        println!(
+                            "  {:<25} {}",
+                            "",
+                            format!("(moves from: {source_vg})").dimmed()
+                        );
+                    }
                 }
             }
         }
@@ -1861,35 +1868,49 @@ fn print_team_plans(plans: &[pokeplanner_core::TeamPlan]) {
             );
         }
 
-        // Move coverage summary (only when move selection was performed)
-        if let Some(ref move_cov) = cov.move_coverage {
-            let covered_count = move_cov.len();
-            let total_types = PokemonType::ALL.len();
-            let pct = (covered_count as f64 / total_types as f64) * 100.0;
-            let pct_display = if pct >= 80.0 {
-                format!("{pct:.0}%").green()
-            } else if pct >= 50.0 {
-                format!("{pct:.0}%").yellow()
-            } else {
-                format!("{pct:.0}%").red()
-            };
-            println!(
-                "  {} {pct_display} ({covered_count}/{total_types} types hit SE by moves)",
-                "Move coverage:".bold(),
-            );
-
-            let uncovered_by_moves: Vec<PokemonType> = PokemonType::ALL
-                .iter()
-                .filter(|t| !move_cov.contains(t))
-                .copied()
-                .collect();
-            if !uncovered_by_moves.is_empty() {
+        // Move coverage summary
+        match &cov.move_coverage {
+            MoveCoverage::Available { types: move_cov } => {
+                let covered_count = move_cov.len();
+                let total_types = PokemonType::ALL.len();
+                let pct = (covered_count as f64 / total_types as f64) * 100.0;
+                let pct_display = if pct >= 80.0 {
+                    format!("{pct:.0}%").green()
+                } else if pct >= 50.0 {
+                    format!("{pct:.0}%").yellow()
+                } else {
+                    format!("{pct:.0}%").red()
+                };
                 println!(
-                    "    {} {}",
-                    "Not covered by moves:".dimmed(),
-                    colored_type_list(&uncovered_by_moves)
+                    "  {} {pct_display} ({covered_count}/{total_types} types hit SE by moves)",
+                    "Move coverage:".bold(),
+                );
+
+                let uncovered_by_moves: Vec<PokemonType> = PokemonType::ALL
+                    .iter()
+                    .filter(|t| !move_cov.contains(t))
+                    .copied()
+                    .collect();
+                if !uncovered_by_moves.is_empty() {
+                    println!(
+                        "    {} {}",
+                        "Not covered by moves:".dimmed(),
+                        colored_type_list(&uncovered_by_moves)
+                    );
+                }
+            }
+            MoveCoverage::Unavailable { version_groups } => {
+                println!(
+                    "  {} {}",
+                    "Move coverage:".bold(),
+                    format!(
+                        "No learnset data available for {}",
+                        version_groups.join(", ")
+                    )
+                    .dimmed()
                 );
             }
+            MoveCoverage::NotAttempted => {}
         }
     }
     println!();

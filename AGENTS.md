@@ -42,7 +42,7 @@
 
 ## Architecture Quick Reference
 
-- **Core types**: `crates/pokeplanner-core/` — shared models (Pokemon, Move, MoveStatChange, LearnsetEntry, DetailedLearnsetEntry, RecommendedMove, MoveRole), errors, job types, team types
+- **Core types**: `crates/pokeplanner-core/` — shared models (Pokemon, Move, MoveStatChange, LearnsetEntry, DetailedLearnsetEntry, RecommendedMove, MoveRole, MoveCoverage), errors, job types, team types
 - **Storage**: `crates/pokeplanner-storage/` — `Storage` trait + `JsonFileStorage`
 - **PokeAPI Client**: `crates/pokeplanner-pokeapi/` — `PokeApiClient` trait + `PokeApiHttpClient` with disk cache and rate limiting. `MoveResponse` includes `meta` (drain, stat_chance, etc.) and `stat_changes` fields for move safety filtering
 - **Service**: `crates/pokeplanner-service/` — business logic, job orchestration, team planner, move selector, type chart
@@ -104,6 +104,8 @@ Jobs are submitted, assigned a UUID, and processed asynchronously via `tokio::sp
 - Score = 0.4 × offensive coverage + 0.3 × defensive score + 0.3 × normalized BST
 - Configurable `top_k` (default 5)
 - v1: base type chart only (no abilities/moves)
+- **Learnset fallback chain**: When fetching moves for a pokemon, tries: (1) requested VGs, (2) sibling VGs in the same generation, (3) all VGs picking the most recent. `VersionGroupInfo` includes `generation` (e.g., "generation-ix") for this. When fallback is used, `TeamMember.learnset_source_vg` records the source.
+- **MoveCoverage enum**: `NotAttempted` | `Unavailable { version_groups }` | `Available { types }` — avoids misleading 0% when learnset data is absent
 
 ## API Endpoints
 

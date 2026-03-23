@@ -61,8 +61,8 @@ The job system supports long-running operations:
    - N > 25: greedy beam search (beam width 50, high-quality heuristic)
 5. Score function: 40% offensive type coverage + 30% defensive score + 30% normalized BST
 6. Returns top-K teams with type coverage analysis
-7. **Move selection phase** (post-hoc): If a learnset version group is available, recommends 4 optimal moves per team member via `MoveSelector`. For Game sources, iterates through the version group list until finding one with learnset data. For Pokedex sources, auto-resolves version groups that contain the pokedex. Errors are non-fatal — members get `recommended_moves: None` on failure.
-8. **Move coverage**: After move selection, the service computes `move_coverage` — the set of types hit super-effectively by the team's actual recommended moves. The CLI displays this as a percentage summary alongside the existing type coverage.
+7. **Move selection phase** (post-hoc): If a learnset version group is available, recommends 4 optimal moves per team member via `MoveSelector`. Uses a three-tier fallback chain per pokemon: (a) try requested version groups, (b) try sibling VGs in the same generation, (c) fetch all VG data and pick the most recent generation. When fallback is used, `TeamMember.learnset_source_vg` records which VG provided the data. Errors are non-fatal — members get `recommended_moves: None` on failure.
+8. **Move coverage**: After move selection, the service sets `move_coverage: MoveCoverage` — a three-state enum: `NotAttempted` (move selection was skipped, e.g. Custom source), `Unavailable { version_groups }` (attempted but no learnset data found for any team member even after fallback), or `Available { types }` (the set of types hit SE by the team's recommended moves). The CLI displays a percentage summary for `Available`, a diagnostic note for `Unavailable`, and nothing for `NotAttempted`.
 
 ## PokeAPI Navigation Chain
 

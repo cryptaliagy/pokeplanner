@@ -12,4 +12,6 @@ pub struct VersionGroupInfo {
     pub name: String,
     pub versions: Vec<String>,
     pub pokedexes: Vec<String>,
+    /// PokeAPI generation name, e.g. "generation-i", "generation-ix".
+    pub generation: String,
 }
