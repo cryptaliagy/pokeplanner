@@ -44,7 +44,7 @@
 
 - **Core types**: `crates/pokeplanner-core/` — shared models (Pokemon, Move, MoveStatChange, LearnsetEntry, DetailedLearnsetEntry, RecommendedMove, MoveRole), errors, job types, team types
 - **Storage**: `crates/pokeplanner-storage/` — `Storage` trait + `JsonFileStorage`
-- **PokeAPI Client**: `crates/pokeplanner-pokeapi/` — `PokeApiClient` trait + `PokeApiHttpClient` with disk cache and rate limiting
+- **PokeAPI Client**: `crates/pokeplanner-pokeapi/` — `PokeApiClient` trait + `PokeApiHttpClient` with disk cache and rate limiting. `MoveResponse` includes `meta` (drain, stat_chance, etc.) and `stat_changes` fields for move safety filtering
 - **Service**: `crates/pokeplanner-service/` — business logic, job orchestration, team planner, type chart
 - **REST API**: `crates/pokeplanner-api-rest/` — Axum server on port 3000
 - **gRPC API**: `crates/pokeplanner-api-grpc/` — Tonic server on port 50051
