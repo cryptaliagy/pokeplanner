@@ -30,8 +30,8 @@
 - [x] 5.1 Core types extended (Move.drain, Move.self_stat_changes, RecommendedMove, MoveRole)
 - [x] 5.2 PokeAPI client captures move meta and stat_changes
 - [x] 5.3 MoveSelector algorithm (filtering, STAB selection, greedy coverage, mirror fallback)
-- [ ] 5.4 Service integration (MoveSelector wired into team plan job flow)
-- [ ] 5.5 CLI display (recommended moves in team plan output)
+- [x] 5.4 Service integration (MoveSelector wired into team plan job flow, learnset VG resolution)
+- [x] 5.5 CLI display (recommended moves in team plan output)
 
 ## Future Work
 - [x] gRPC proto messages for new RPCs (PlanTeam, GetGamePokemon, etc.)

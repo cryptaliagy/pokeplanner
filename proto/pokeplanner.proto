@@ -200,6 +200,7 @@ message PlanTeamRequest {
   repeated string exclude = 7;
   repeated string exclude_species = 8;
   repeated string exclude_variant_types = 9;
+  optional string learnset_version_group = 10;
 }
 
 message PlanTeamResponse {

@@ -289,6 +289,7 @@ impl GrpcService for GrpcHandler {
             } else {
                 Some(inner.counter_team)
             },
+            learnset_version_group: inner.learnset_version_group,
         };
         let job_id = self
             .service

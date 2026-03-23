@@ -13,6 +13,7 @@ use pokeplanner_pokeapi::{PokeApiClient, VersionGroupInfo};
 use pokeplanner_storage::Storage;
 use tracing::{info, warn};
 
+use crate::move_selector::MoveSelector;
 use crate::team_planner::TeamPlanner;
 use crate::type_chart::TypeChart;
 
@@ -236,12 +237,38 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
                 return;
             }
         };
+        // Resolve candidate version groups for learnset-based move selection.
+        // We try each in order until finding one with learnset data for a given pokemon.
+        let learnset_vgs: Vec<String> = if let Some(vg) = &request.learnset_version_group {
+            vec![vg.clone()]
+        } else {
+            match &request.source {
+                TeamSource::Game { version_groups } => version_groups.clone(),
+                TeamSource::Pokedex { pokedex_name } => {
+                    // Find version groups that contain this pokedex
+                    match pokeapi.get_version_groups(request.no_cache).await {
+                        Ok(groups) => groups
+                            .into_iter()
+                            .filter(|g| g.pokedexes.contains(pokedex_name))
+                            .map(|g| g.name)
+                            .collect(),
+                        Err(e) => {
+                            warn!("Failed to resolve version groups for pokedex: {e}");
+                            Vec::new()
+                        }
+                    }
+                }
+                TeamSource::Custom { .. } => Vec::new(),
+            }
+        };
+        let total_steps = if learnset_vgs.is_empty() { 3 } else { 4 };
+
         job.status = JobStatus::Running;
         job.updated_at = Utc::now();
         job.progress = Some(JobProgress {
             phase: "Fetching pokemon data".to_string(),
             completed_steps: 0,
-            total_steps: 3,
+            total_steps,
         });
         let _ = storage.update_job(&job).await;
 
@@ -308,7 +335,7 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
         job.progress = Some(JobProgress {
             phase: "Filtering candidates".to_string(),
             completed_steps: 1,
-            total_steps: 3,
+            total_steps,
         });
         job.updated_at = Utc::now();
         let _ = storage.update_job(&job).await;
@@ -355,7 +382,7 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
         job.progress = Some(JobProgress {
             phase: "Computing optimal teams".to_string(),
             completed_steps: 2,
-            total_steps: 3,
+            total_steps,
         });
         job.updated_at = Utc::now();
         let _ = storage.update_job(&job).await;
@@ -387,15 +414,50 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
         if let Some(ref enemies) = counter_pokemon {
             planner = planner.with_counter_team(enemies);
         }
-        let plans = planner.plan_teams(&filtered, top_k);
+        let mut plans = planner.plan_teams(&filtered, top_k);
+
+        // Step 4 (optional): Select recommended moves for each team member
+        if !learnset_vgs.is_empty() {
+            job.progress = Some(JobProgress {
+                phase: "Selecting recommended moves".to_string(),
+                completed_steps: 3,
+                total_steps,
+            });
+            job.updated_at = Utc::now();
+            let _ = storage.update_job(&job).await;
+
+            let selector = MoveSelector::new(&type_chart);
+
+            for plan in &mut plans {
+                for member in &mut plan.team {
+                    match Self::fetch_learnset_and_select(
+                        &pokeapi,
+                        &selector,
+                        member,
+                        &learnset_vgs,
+                        request.no_cache,
+                    )
+                    .await
+                    {
+                        Ok(()) => {}
+                        Err(e) => {
+                            warn!(
+                                "Move selection failed for {}: {e}",
+                                member.pokemon.form_name
+                            );
+                        }
+                    }
+                }
+            }
+        }
 
         // Complete
         job.status = JobStatus::Completed;
         job.updated_at = Utc::now();
         job.progress = Some(JobProgress {
             phase: "Complete".to_string(),
-            completed_steps: 3,
-            total_steps: 3,
+            completed_steps: total_steps,
+            total_steps,
         });
         job.result = Some(JobResult {
             message: format!(
@@ -441,6 +503,80 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
             uncovered_types,
             coverage_score,
         })
+    }
+
+    /// Fetch learnset data and select moves for a team member.
+    /// Tries each candidate version group in order until one returns a non-empty learnset.
+    async fn fetch_learnset_and_select(
+        pokeapi: &Arc<P>,
+        selector: &MoveSelector<'_>,
+        member: &mut pokeplanner_core::TeamMember,
+        version_groups: &[String],
+        no_cache: bool,
+    ) -> Result<(), AppError> {
+        let pokemon_name = &member.pokemon.form_name;
+
+        // Try each version group until we find one with learnset data
+        let mut learnset = Vec::new();
+        for vg in version_groups {
+            match pokeapi
+                .get_pokemon_learnset(pokemon_name, Some(vg), no_cache)
+                .await
+            {
+                Ok(entries) if !entries.is_empty() => {
+                    learnset = entries;
+                    break;
+                }
+                Ok(_) => continue, // empty learnset, try next VG
+                Err(e) => {
+                    warn!("Learnset fetch failed for {pokemon_name} in {vg}: {e}");
+                    continue;
+                }
+            }
+        }
+
+        if learnset.is_empty() {
+            return Ok(()); // No learnset found in any VG
+        }
+
+        // Fetch move details, deduplicating by name
+        let unique_moves: std::collections::HashSet<String> =
+            learnset.iter().map(|e| e.move_name.clone()).collect();
+        let mut move_cache: std::collections::HashMap<String, pokeplanner_core::Move> =
+            std::collections::HashMap::new();
+        for name in unique_moves {
+            match pokeapi.get_move(&name, no_cache).await {
+                Ok(m) => {
+                    move_cache.insert(name, m);
+                }
+                Err(e) => warn!("Failed to fetch move {name}: {e}"),
+            }
+        }
+
+        let mut detailed = Vec::new();
+        for entry in learnset {
+            if let Some(m) = move_cache.get(&entry.move_name) {
+                detailed.push(pokeplanner_core::DetailedLearnsetEntry {
+                    move_details: m.clone(),
+                    learn_method: entry.learn_method,
+                    level: entry.level,
+                });
+            }
+        }
+
+        let weaknesses: Vec<PokemonType> = member
+            .weaknesses_2x
+            .iter()
+            .chain(member.weaknesses_4x.iter())
+            .copied()
+            .collect();
+
+        let recommendation = selector.select_moves(&member.pokemon, &detailed, &weaknesses);
+        if !recommendation.moves.is_empty() {
+            member.recommended_moves = Some(recommendation.moves);
+        }
+
+        Ok(())
     }
 
     async fn fail_job(storage: &Arc<S>, job: &mut Job, message: &str) {
@@ -872,6 +1008,7 @@ mod tests {
             exclude_species: Vec::new(),
             exclude_variant_types: vec!["mega".to_string()],
             counter_team: None,
+            learnset_version_group: None,
         };
 
         let job_id = svc.submit_team_plan(request).await.unwrap();
@@ -934,6 +1071,7 @@ mod tests {
                 "alola".to_string(),
             ],
             counter_team: None,
+            learnset_version_group: None,
         };
 
         let job_id = svc.submit_team_plan(request).await.unwrap();
@@ -957,6 +1095,281 @@ mod tests {
                                 && !name.contains("gmax")
                                 && !name.contains("alola"),
                             "variant should be excluded, got: {name}"
+                        );
+                    }
+                    break;
+                }
+                JobStatus::Failed => {
+                    panic!(
+                        "Job failed: {}",
+                        job.result.map(|r| r.message).unwrap_or_default()
+                    );
+                }
+                _ => continue,
+            }
+        }
+    }
+
+    /// Mock that returns pokemon with learnset data for testing move selection integration.
+    struct MockPokeApiWithMoves;
+
+    impl PokeApiClient for MockPokeApiWithMoves {
+        async fn get_version_groups(
+            &self,
+            _no_cache: bool,
+        ) -> Result<Vec<VersionGroupInfo>, AppError> {
+            Ok(vec![VersionGroupInfo {
+                name: "test-game".to_string(),
+                versions: vec!["test-v1".to_string()],
+                pokedexes: vec!["test-dex".to_string()],
+            }])
+        }
+
+        async fn get_game_pokemon(
+            &self,
+            _version_group: &str,
+            _no_cache: bool,
+            _include_variants: bool,
+        ) -> Result<Vec<Pokemon>, AppError> {
+            // Return pokemon with distinct attack stats so MoveSelector picks a class
+            Ok(vec![
+                {
+                    let mut p = make_test_pokemon("pikachu", vec![PokemonType::Electric], 320);
+                    // Make special attack higher so it picks special moves
+                    p.stats.special_attack = 80;
+                    p.stats.attack = 40;
+                    p
+                },
+                {
+                    let mut p = make_test_pokemon(
+                        "charizard",
+                        vec![PokemonType::Fire, PokemonType::Flying],
+                        534,
+                    );
+                    p.stats.special_attack = 109;
+                    p.stats.attack = 84;
+                    p
+                },
+            ])
+        }
+
+        async fn get_pokemon(&self, name: &str, _no_cache: bool) -> Result<Pokemon, AppError> {
+            Ok(make_test_pokemon(name, vec![PokemonType::Normal], 400))
+        }
+
+        async fn get_species_varieties(
+            &self,
+            species_name: &str,
+            _no_cache: bool,
+        ) -> Result<Vec<Pokemon>, AppError> {
+            Ok(vec![make_test_pokemon(
+                species_name,
+                vec![PokemonType::Normal],
+                400,
+            )])
+        }
+
+        async fn get_pokedex_pokemon(
+            &self,
+            _pokedex_name: &str,
+            _no_cache: bool,
+            _include_variants: bool,
+        ) -> Result<Vec<Pokemon>, AppError> {
+            Ok(vec![
+                make_test_pokemon("pikachu", vec![PokemonType::Electric], 320),
+                make_test_pokemon(
+                    "charizard",
+                    vec![PokemonType::Fire, PokemonType::Flying],
+                    534,
+                ),
+            ])
+        }
+
+        async fn get_type_chart(
+            &self,
+            _no_cache: bool,
+        ) -> Result<pokeplanner_pokeapi::TypeEffectivenessData, AppError> {
+            Ok(pokeplanner_pokeapi::TypeEffectivenessData {
+                entries: Vec::new(),
+            })
+        }
+
+        async fn get_pokemon_learnset(
+            &self,
+            _pokemon_name: &str,
+            _version_group: Option<&str>,
+            _no_cache: bool,
+        ) -> Result<Vec<pokeplanner_core::LearnsetEntry>, AppError> {
+            Ok(vec![
+                pokeplanner_core::LearnsetEntry {
+                    move_name: "thunderbolt".to_string(),
+                    learn_method: pokeplanner_core::LearnMethod::LevelUp,
+                    level: 30,
+                    version_group: "test-game".to_string(),
+                },
+                pokeplanner_core::LearnsetEntry {
+                    move_name: "thunder".to_string(),
+                    learn_method: pokeplanner_core::LearnMethod::LevelUp,
+                    level: 40,
+                    version_group: "test-game".to_string(),
+                },
+                pokeplanner_core::LearnsetEntry {
+                    move_name: "ice-beam".to_string(),
+                    learn_method: pokeplanner_core::LearnMethod::Machine,
+                    level: 0,
+                    version_group: "test-game".to_string(),
+                },
+                pokeplanner_core::LearnsetEntry {
+                    move_name: "psychic".to_string(),
+                    learn_method: pokeplanner_core::LearnMethod::Machine,
+                    level: 0,
+                    version_group: "test-game".to_string(),
+                },
+            ])
+        }
+
+        async fn get_move(
+            &self,
+            move_name: &str,
+            _no_cache: bool,
+        ) -> Result<pokeplanner_core::Move, AppError> {
+            let (move_type, power) = match move_name {
+                "thunderbolt" => (PokemonType::Electric, 90),
+                "thunder" => (PokemonType::Electric, 110),
+                "ice-beam" => (PokemonType::Ice, 90),
+                "psychic" => (PokemonType::Psychic, 90),
+                _ => (PokemonType::Normal, 50),
+            };
+            Ok(pokeplanner_core::Move {
+                name: move_name.to_string(),
+                move_type,
+                power: Some(power),
+                accuracy: Some(100),
+                pp: Some(15),
+                damage_class: "special".to_string(),
+                priority: 0,
+                effect: None,
+                drain: 0,
+                self_stat_changes: Vec::new(),
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn test_team_plan_with_move_selection() {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = Arc::new(
+            JsonFileStorage::new(dir.path().to_path_buf())
+                .await
+                .unwrap(),
+        );
+        let pokeapi = Arc::new(MockPokeApiWithMoves);
+        let svc = PokePlannerService::new(storage, pokeapi);
+
+        let request = TeamPlanRequest {
+            source: TeamSource::Game {
+                version_groups: vec!["test-game".to_string()],
+            },
+            min_bst: None,
+            no_cache: false,
+            top_k: Some(1),
+            include_variants: true,
+            exclude: Vec::new(),
+            exclude_species: Vec::new(),
+            exclude_variant_types: Vec::new(),
+            counter_team: None,
+            learnset_version_group: None, // defaults to first game
+        };
+
+        let job_id = svc.submit_team_plan(request).await.unwrap();
+
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+            let job = svc.get_job(&job_id).await.unwrap();
+            match job.status {
+                JobStatus::Completed => {
+                    let data = job.result.unwrap().data.unwrap();
+                    let plans: Vec<pokeplanner_core::TeamPlan> =
+                        serde_json::from_value(data).unwrap();
+                    assert!(!plans.is_empty());
+                    // At least one member should have recommended moves
+                    let has_moves = plans[0].team.iter().any(|m| m.recommended_moves.is_some());
+                    assert!(
+                        has_moves,
+                        "Expected at least one team member to have recommended moves"
+                    );
+
+                    // Verify no recommended move has recoil or self-debuffs
+                    for member in &plans[0].team {
+                        if let Some(ref moves) = member.recommended_moves {
+                            for m in moves {
+                                assert!(m.power > 0, "recommended move should have power");
+                            }
+                            // All moves should be same damage class
+                            let classes: std::collections::HashSet<&str> =
+                                moves.iter().map(|m| m.damage_class.as_str()).collect();
+                            assert!(
+                                classes.len() <= 1,
+                                "all recommended moves should be same damage class, got: {classes:?}"
+                            );
+                        }
+                    }
+                    break;
+                }
+                JobStatus::Failed => {
+                    panic!(
+                        "Job failed: {}",
+                        job.result.map(|r| r.message).unwrap_or_default()
+                    );
+                }
+                _ => continue,
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_team_plan_without_learnset_skips_moves() {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = Arc::new(
+            JsonFileStorage::new(dir.path().to_path_buf())
+                .await
+                .unwrap(),
+        );
+        let pokeapi = Arc::new(MockPokeApiWithMoves);
+        let svc = PokePlannerService::new(storage, pokeapi);
+
+        // Pokedex source without learnset_version_group -> skip move selection
+        let request = TeamPlanRequest {
+            source: TeamSource::Pokedex {
+                pokedex_name: "test-dex".to_string(),
+            },
+            min_bst: None,
+            no_cache: false,
+            top_k: Some(1),
+            include_variants: true,
+            exclude: Vec::new(),
+            exclude_species: Vec::new(),
+            exclude_variant_types: Vec::new(),
+            counter_team: None,
+            learnset_version_group: None,
+        };
+
+        let job_id = svc.submit_team_plan(request).await.unwrap();
+
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+            let job = svc.get_job(&job_id).await.unwrap();
+            match job.status {
+                JobStatus::Completed => {
+                    let data = job.result.unwrap().data.unwrap();
+                    let plans: Vec<pokeplanner_core::TeamPlan> =
+                        serde_json::from_value(data).unwrap();
+                    assert!(!plans.is_empty());
+                    // All members should have None for recommended_moves
+                    for member in &plans[0].team {
+                        assert!(
+                            member.recommended_moves.is_none(),
+                            "Expected no recommended moves when learnset_version_group is None for Pokedex source"
                         );
                     }
                     break;

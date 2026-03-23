@@ -122,6 +122,10 @@ enum Commands {
         /// Enemy pokemon to counter (comma-separated). Optimizes team against this specific team.
         #[arg(long, value_delimiter = ',')]
         counter: Option<Vec<String>>,
+        /// Version group for learnset-based move selection (e.g., "red-blue").
+        /// Defaults to the game for --game sources; required for --pokedex/--pokemon move selection.
+        #[arg(long)]
+        learnset_game: Option<String>,
     },
     /// Analyze type coverage for a team
     AnalyzeTeam {
@@ -512,6 +516,7 @@ async fn main() -> anyhow::Result<()> {
             exclude,
             exclude_species,
             counter,
+            learnset_game,
         } => {
             let source = if let Some(games) = game {
                 TeamSource::Game {
@@ -541,6 +546,7 @@ async fn main() -> anyhow::Result<()> {
                 exclude_species: exclude_species.unwrap_or_default(),
                 exclude_variant_types: exclude_variant_type.unwrap_or_default(),
                 counter_team: counter,
+                learnset_version_group: learnset_game,
             };
 
             let job_id = service.submit_team_plan(request).await?;
@@ -1624,6 +1630,23 @@ fn print_team_plans(plans: &[pokeplanner_core::TeamPlan]) {
             }
             if !weakness_parts.is_empty() {
                 println!("  {:<25} {}", "", weakness_parts.join("  "));
+            }
+
+            // Recommended moves
+            if let Some(ref moves) = member.recommended_moves {
+                let moves_str: Vec<String> = moves
+                    .iter()
+                    .map(|m| {
+                        let power_str = format!("{}p", m.power);
+                        format!(
+                            "{} ({} {})",
+                            m.move_name,
+                            color_type(&m.move_type),
+                            power_str
+                        )
+                    })
+                    .collect();
+                println!("  {:<25} {} {}", "", "Moves:".bold(), moves_str.join(", "));
             }
         }
 
