@@ -12,7 +12,6 @@ use pokeplanner_core::{
 use pokeplanner_pokeapi::{PokeApiClientConfig, PokeApiHttpClient};
 use pokeplanner_service::PokePlannerService;
 use pokeplanner_storage::JsonFileStorage;
-use tracing_subscriber::EnvFilter;
 use unusable::UnusableStore;
 
 fn default_data_dir() -> PathBuf {
@@ -35,6 +34,10 @@ struct Cli {
     /// Directory for job storage data
     #[arg(long, global = true, default_value_os_t = default_data_dir().join("jobs"))]
     data_dir: PathBuf,
+
+    /// Increase verbosity (-v for info, -vv for debug)
+    #[arg(short, long, global = true, action = clap::ArgAction::Count)]
+    verbose: u8,
 
     #[command(subcommand)]
     command: Commands,
@@ -428,11 +431,8 @@ impl From<CliSortOrder> for SortOrder {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .init();
-
     let cli = Cli::parse();
+    pokeplanner_telemetry::init_cli_telemetry(cli.verbose);
     let cache_dir = cli.cache_dir;
     let base_dir = default_data_dir();
 

@@ -16,7 +16,12 @@
 | **uuid** | 1.x | Unique identifiers | RFC-compliant UUIDs; v4 for random IDs, serde support |
 | **chrono** | 0.4 | Date/time handling | Full-featured datetime library with serde and timezone support |
 | **tracing** | 0.1 | Structured logging | Async-aware, structured, composable instrumentation |
-| **tracing-subscriber** | 0.3 | Log output | Configurable subscribers with env-filter for log levels |
+| **tracing-subscriber** | 0.3 | Log output | Configurable subscribers with env-filter and JSON format support |
+| **opentelemetry** | 0.31 | Telemetry API | Vendor-neutral observability API for traces and metrics |
+| **opentelemetry_sdk** | 0.31 | Telemetry SDK | Tracer/meter provider implementation with tokio batch export |
+| **opentelemetry-otlp** | 0.31 | OTLP exporter | Exports traces/metrics via OTLP gRPC (uses tonic transport) |
+| **tracing-opentelemetry** | 0.32 | Tracing bridge | Bridges `tracing` spans to OpenTelemetry traces |
+| **tower-http** | 0.6 | HTTP middleware | `TraceLayer` for automatic request/response span instrumentation on REST and gRPC |
 | **reqwest** | 0.12 | HTTP client | De facto async HTTP client for Rust; used for PokeAPI requests with JSON deserialization |
 | **governor** | 0.8 | Rate limiting | Token-bucket rate limiter for client-side outbound request throttling; prevents PokeAPI hammering |
 | **futures** | 0.3 | Async utilities | `stream::BufferedUnordered` for concurrent pokemon fetching with bounded concurrency |
@@ -45,3 +50,5 @@
 - **Native async traits over async-trait**: Both the `Storage` trait and `PokeApiClient` trait use native `impl Future` return types (Rust 1.75+) with explicit `+ Send` bounds instead of the `async-trait` crate. Combined with generics on `PokePlannerService<S: Storage, P: PokeApiClient>`, this avoids heap-allocated boxed futures.
 - **reqwest over hyper directly**: reqwest provides a high-level API with JSON deserialization, connection pooling, and TLS out of the box. PokeAPI integration doesn't need low-level HTTP control.
 - **governor over tower rate limiting**: Tower's rate limiting is designed for incoming request middleware. Governor provides client-side outgoing rate limiting with a clean async API (token-bucket algorithm), which is exactly what's needed for PokeAPI fair use compliance. Default rate is 20 req/s with burst of 5 — conservative for a free, no-auth API behind Cloudflare. Configurable via `PokeApiClientConfig`.
+- **OpenTelemetry for observability**: OTEL provides vendor-neutral traces and metrics with a rich Rust ecosystem. The `pokeplanner-telemetry` crate centralizes subscriber initialization across all three binaries. OTEL export is gated behind `--otlp-endpoint` — zero overhead when disabled. Versions are pinned (otel 0.31 / tracing-opentelemetry 0.32) due to frequent breaking changes in the OTEL Rust ecosystem.
+- **tower-http TraceLayer**: Provides automatic per-request spans for both REST (axum) and gRPC (tonic) servers with minimal code. Captures method, path, status code, and latency out of the box.

@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use pokeplanner_core::{DetailedLearnsetEntry, MoveRole, Pokemon, PokemonType, RecommendedMove};
+use tracing::{debug, debug_span};
 
 use crate::type_chart::TypeChart;
 
@@ -39,14 +40,22 @@ impl<'a> MoveSelector<'a> {
         learnset: &[DetailedLearnsetEntry],
         weaknesses: &[PokemonType],
     ) -> MoveRecommendation {
+        let _span = debug_span!(
+            "select_moves",
+            pokemon = %pokemon.form_name,
+        )
+        .entered();
+
         let preferred_class = if pokemon.stats.attack >= pokemon.stats.special_attack {
             "physical"
         } else {
             "special"
         };
+        debug!(preferred_class, "selecting moves");
 
         // Filter and deduplicate eligible moves
         let eligible = self.filter_eligible(learnset, preferred_class);
+        debug!(eligible_count = eligible.len(), "filtered eligible moves");
 
         if eligible.is_empty() {
             return MoveRecommendation {
@@ -108,18 +117,22 @@ impl<'a> MoveSelector<'a> {
 
             // Must be a damaging move with positive power
             if m.power.is_none_or(|p| p == 0) {
+                debug!(move_name = %m.name, "rejected: non-damaging");
                 continue;
             }
             // Must match preferred damage class
             if m.damage_class != preferred_class {
+                debug!(move_name = %m.name, class = %m.damage_class, "rejected: wrong damage class");
                 continue;
             }
             // No recoil (drain < 0)
             if m.drain < 0 {
+                debug!(move_name = %m.name, drain = m.drain, "rejected: recoil");
                 continue;
             }
             // No guaranteed self-debuffs
             if !m.self_stat_changes.is_empty() {
+                debug!(move_name = %m.name, "rejected: self-debuff");
                 continue;
             }
             // Deduplicate by name

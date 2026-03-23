@@ -46,9 +46,13 @@ pokeplanner/
 │   │   └── src/
 │   │       ├── main.rs         # Server binary + gRPC handlers
 │   │       └── build.rs        # Proto compilation
-│   └── pokeplanner-cli/        # CLI application
+│   ├── pokeplanner-cli/        # CLI application
+│   │   └── src/
+│   │       └── main.rs         # Clap-based CLI with team planning commands
+│   └── pokeplanner-telemetry/  # Shared observability initialization
 │       └── src/
-│           └── main.rs         # Clap-based CLI with team planning commands
+│           ├── lib.rs          # Subscriber init (server + CLI), TelemetryGuard, OTEL setup
+│           └── metrics.rs      # Metrics struct with OTEL counters and histograms
 ├── data/
 │   ├── jobs/                   # Job state persistence (JSON files)
 │   └── cache/                  # PokeAPI response cache

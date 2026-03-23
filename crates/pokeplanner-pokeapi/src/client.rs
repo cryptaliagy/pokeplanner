@@ -93,19 +93,35 @@ impl PokeApiHttpClient {
         cache_key: &str,
         no_cache: bool,
     ) -> Result<T, AppError> {
+        let start = std::time::Instant::now();
+
         // Check cache first
         if let Some(cached) = self
             .cache
             .get::<T>(cache_category, cache_key, no_cache)
             .await
         {
+            debug!(
+                url,
+                cache_category,
+                cache_key,
+                cache_hit = true,
+                elapsed_ms = start.elapsed().as_millis() as u64,
+                "cache hit"
+            );
             return Ok(cached);
         }
 
         // Rate limit
         self.rate_limiter.until_ready().await;
 
-        debug!("Fetching {url}");
+        debug!(
+            url,
+            cache_category,
+            cache_key,
+            cache_hit = false,
+            "fetching from API"
+        );
         let response = self
             .http
             .get(url)
@@ -124,6 +140,14 @@ impl PokeApiHttpClient {
             .json()
             .await
             .map_err(|e| AppError::PokeApi(format!("Failed to deserialize response: {e}")))?;
+
+        debug!(
+            url,
+            cache_category,
+            cache_key,
+            elapsed_ms = start.elapsed().as_millis() as u64,
+            "fetch complete"
+        );
 
         // Cache the result
         if let Err(e) = self.cache.set(cache_category, cache_key, &data).await {

@@ -13,6 +13,7 @@ use pokeplanner_core::{
 use pokeplanner_service::PokePlannerService;
 use serde::Deserialize;
 use serde_json::json;
+use tower_http::trace::TraceLayer;
 use uuid::Uuid;
 
 pub fn create_router<S: pokeplanner_storage::Storage, P: pokeplanner_pokeapi::PokeApiClient>(
@@ -32,6 +33,7 @@ pub fn create_router<S: pokeplanner_storage::Storage, P: pokeplanner_pokeapi::Po
         .route("/pokemon/{name}", get(get_pokemon::<S, P>))
         .route("/teams/plan", post(plan_team::<S, P>))
         .route("/teams/analyze", post(analyze_team::<S, P>))
+        .layer(TraceLayer::new_for_http())
         .with_state(service)
 }
 

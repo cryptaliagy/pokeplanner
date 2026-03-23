@@ -46,6 +46,7 @@
 - **Storage**: `crates/pokeplanner-storage/` — `Storage` trait + `JsonFileStorage`
 - **PokeAPI Client**: `crates/pokeplanner-pokeapi/` — `PokeApiClient` trait + `PokeApiHttpClient` with disk cache and rate limiting. `MoveResponse` includes `meta` (drain, stat_chance, etc.) and `stat_changes` fields for move safety filtering
 - **Service**: `crates/pokeplanner-service/` — business logic, job orchestration, team planner, move selector, type chart
+- **Telemetry**: `crates/pokeplanner-telemetry/` — shared observability init (tracing subscriber, OTEL traces, metrics), `Metrics` struct, `TelemetryGuard`
 - **REST API**: `crates/pokeplanner-api-rest/` — Axum server on port 3000
 - **gRPC API**: `crates/pokeplanner-api-grpc/` — Tonic server on port 50051
 - **CLI**: `crates/pokeplanner-cli/` — Clap CLI (`pokeplanner` binary)
@@ -186,6 +187,9 @@ cargo run -p pokeplanner-cli -- list-games                     # List available 
 cargo run -p pokeplanner-cli -- game-pokemon red-blue          # Pokemon in Red/Blue
 cargo run -p pokeplanner-cli -- plan-team --game red-blue --wait               # Plan optimal team
 cargo run -p pokeplanner-cli -- plan-team --game red-blue,gold-silver --wait  # Plan across games
+cargo run -p pokeplanner-cli -- -v list-games                   # Verbose (info level) output
+cargo run -p pokeplanner-cli -- -vv plan-team --game red-blue   # Debug-level output (filtering decisions, cache hits)
 cargo run -p pokeplanner-api-rest                              # Start REST server (--host, --port, --cache-dir, --data-dir)
+cargo run -p pokeplanner-api-rest -- --otlp-endpoint http://localhost:4317  # REST with OTEL export
 cargo run -p pokeplanner-api-grpc                              # Start gRPC server (--host, --port, --cache-dir, --data-dir)
 ```
