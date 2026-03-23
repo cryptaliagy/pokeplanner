@@ -581,6 +581,8 @@ impl PokeApiClient for PokeApiHttpClient {
             damage_class: resp.damage_class.name,
             priority: resp.priority,
             effect,
+            drain: 0,
+            self_stat_changes: Vec::new(),
         })
     }
 }

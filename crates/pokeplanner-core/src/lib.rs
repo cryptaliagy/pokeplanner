@@ -6,10 +6,10 @@ pub mod team;
 pub use error::AppError;
 pub use job::{Job, JobId, JobKind, JobProgress, JobResult, JobStatus};
 pub use model::{
-    BaseStats, DetailedLearnsetEntry, HealthResponse, LearnMethod, LearnsetEntry, Move, Pokemon,
-    PokemonType,
+    BaseStats, DetailedLearnsetEntry, HealthResponse, LearnMethod, LearnsetEntry, Move,
+    MoveStatChange, Pokemon, PokemonType,
 };
 pub use team::{
-    filter_sort_limit, sort_pokemon, PokemonQueryParams, SortField, SortOrder, TeamMember,
-    TeamPlan, TeamPlanRequest, TeamSource, TypeCoverage,
+    filter_sort_limit, sort_pokemon, MoveRole, PokemonQueryParams, RecommendedMove, SortField,
+    SortOrder, TeamMember, TeamPlan, TeamPlanRequest, TeamSource, TypeCoverage,
 };
