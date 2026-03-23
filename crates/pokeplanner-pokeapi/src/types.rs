@@ -20,6 +20,7 @@ pub struct VersionGroupResponse {
     pub name: String,
     pub pokedexes: Vec<NamedApiResource>,
     pub versions: Vec<NamedApiResource>,
+    pub generation: NamedApiResource,
 }
 
 // --- Pokedex ---
@@ -220,12 +221,14 @@ mod tests {
             "id": 1,
             "name": "red-blue",
             "pokedexes": [{"name": "kanto", "url": ""}],
-            "versions": [{"name": "red", "url": ""}, {"name": "blue", "url": ""}]
+            "versions": [{"name": "red", "url": ""}, {"name": "blue", "url": ""}],
+            "generation": {"name": "generation-i", "url": ""}
         }"#;
         let vg: VersionGroupResponse = serde_json::from_str(json).unwrap();
         assert_eq!(vg.name, "red-blue");
         assert_eq!(vg.pokedexes.len(), 1);
         assert_eq!(vg.versions.len(), 2);
+        assert_eq!(vg.generation.name, "generation-i");
     }
 
     #[test]

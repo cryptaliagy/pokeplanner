@@ -57,6 +57,18 @@ message TypeCoverage {
   repeated string defensive_weaknesses = 2;
   repeated string uncovered_types = 3;
   double coverage_score = 4;
+  // Move coverage state — exactly one of these should be set.
+  // If none are set, move selection was not attempted.
+  MoveCoverageAvailable move_coverage_available = 5;
+  MoveCoverageUnavailable move_coverage_unavailable = 6;
+}
+
+message MoveCoverageAvailable {
+  repeated string types = 1;
+}
+
+message MoveCoverageUnavailable {
+  repeated string version_groups = 1;
 }
 
 // --- Job messages ---
@@ -104,6 +116,7 @@ message VersionGroupInfo {
   string name = 1;
   repeated string versions = 2;
   repeated string pokedexes = 3;
+  string generation = 4;
 }
 
 message GetVersionGroupsResponse {

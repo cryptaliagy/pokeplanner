@@ -7,7 +7,8 @@ use std::sync::Arc;
 use chrono::Utc;
 use pokeplanner_core::{
     filter_sort_limit, AppError, HealthResponse, Job, JobId, JobKind, JobProgress, JobResult,
-    JobStatus, Pokemon, PokemonQueryParams, PokemonType, TeamPlanRequest, TeamSource, TypeCoverage,
+    JobStatus, MoveCoverage, Pokemon, PokemonQueryParams, PokemonType, TeamPlanRequest, TeamSource,
+    TypeCoverage,
 };
 use pokeplanner_pokeapi::{PokeApiClient, VersionGroupInfo};
 use pokeplanner_storage::Storage;
@@ -463,6 +464,15 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
             job.updated_at = Utc::now();
             let _ = storage.update_job(&job).await;
 
+            // Fetch all version groups for generation-aware fallback
+            let all_vgs = match pokeapi.get_version_groups(request.no_cache).await {
+                Ok(vgs) => vgs,
+                Err(e) => {
+                    warn!("Failed to fetch version groups for fallback: {e}");
+                    Vec::new()
+                }
+            };
+
             let selector = MoveSelector::new(&type_chart);
 
             for plan in &mut plans {
@@ -472,6 +482,7 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
                         &selector,
                         member,
                         &learnset_vgs,
+                        &all_vgs,
                         request.no_cache,
                     )
                     .await
@@ -484,6 +495,48 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
                             );
                         }
                     }
+                }
+            }
+
+            // Compute move-based type coverage for each plan.
+            // If no team member in any plan received moves, mark as Unavailable
+            // instead of reporting a misleading 0%.
+            let any_member_has_moves = plans
+                .iter()
+                .any(|p| p.team.iter().any(|m| m.recommended_moves.is_some()));
+
+            if any_member_has_moves {
+                for plan in &mut plans {
+                    let move_types: std::collections::HashSet<PokemonType> = plan
+                        .team
+                        .iter()
+                        .filter_map(|m| m.recommended_moves.as_ref())
+                        .flatten()
+                        .map(|m| m.move_type)
+                        .collect();
+
+                    let covered: Vec<PokemonType> = PokemonType::ALL
+                        .iter()
+                        .filter(|&&target| {
+                            move_types
+                                .iter()
+                                .any(|&atk| type_chart.effectiveness(atk, target) >= 2.0)
+                        })
+                        .copied()
+                        .collect();
+
+                    plan.type_coverage.move_coverage = MoveCoverage::Available { types: covered };
+                }
+            } else {
+                warn!(
+                    "No learnset data found in version group(s) {:?} — \
+                     move coverage unavailable",
+                    learnset_vgs
+                );
+                for plan in &mut plans {
+                    plan.type_coverage.move_coverage = MoveCoverage::Unavailable {
+                        version_groups: learnset_vgs.clone(),
+                    };
                 }
             }
         }
@@ -546,22 +599,30 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
             defensive_weaknesses,
             uncovered_types,
             coverage_score,
+            move_coverage: MoveCoverage::NotAttempted,
         })
     }
 
     /// Fetch learnset data and select moves for a team member.
-    /// Tries each candidate version group in order until one returns a non-empty learnset.
+    ///
+    /// Fallback chain:
+    /// 1. Try each candidate version group in order
+    /// 2. If none have data, try other VGs in the same generation
+    /// 3. If still nothing, fetch all VGs and pick the most recent with data
     async fn fetch_learnset_and_select(
         pokeapi: &Arc<P>,
         selector: &MoveSelector<'_>,
         member: &mut pokeplanner_core::TeamMember,
         version_groups: &[String],
+        all_vgs: &[VersionGroupInfo],
         no_cache: bool,
     ) -> Result<(), AppError> {
         let pokemon_name = &member.pokemon.form_name;
+        let is_primary_vg = |vg: &str| version_groups.iter().any(|v| v == vg);
 
         // Try each version group until we find one with learnset data
         let mut learnset = Vec::new();
+        let mut source_vg: Option<String> = None;
         for vg in version_groups {
             match pokeapi
                 .get_pokemon_learnset(pokemon_name, Some(vg), no_cache)
@@ -569,9 +630,10 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
             {
                 Ok(entries) if !entries.is_empty() => {
                     learnset = entries;
+                    source_vg = Some(vg.clone());
                     break;
                 }
-                Ok(_) => continue, // empty learnset, try next VG
+                Ok(_) => continue,
                 Err(e) => {
                     warn!("Learnset fetch failed for {pokemon_name} in {vg}: {e}");
                     continue;
@@ -579,8 +641,63 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
             }
         }
 
+        // Fallback: try other VGs in the same generation
         if learnset.is_empty() {
-            return Ok(()); // No learnset found in any VG
+            let fallback_vgs = same_generation_fallbacks(version_groups, all_vgs);
+            for vg in &fallback_vgs {
+                match pokeapi
+                    .get_pokemon_learnset(pokemon_name, Some(vg), no_cache)
+                    .await
+                {
+                    Ok(entries) if !entries.is_empty() => {
+                        info!("Using same-gen fallback {vg} for {pokemon_name} learnset");
+                        learnset = entries;
+                        source_vg = Some(vg.clone());
+                        break;
+                    }
+                    Ok(_) => continue,
+                    Err(e) => {
+                        warn!("Learnset fetch failed for {pokemon_name} in {vg}: {e}");
+                        continue;
+                    }
+                }
+            }
+        }
+
+        // Last resort: fetch all VG data and pick the most recent
+        if learnset.is_empty() {
+            match pokeapi
+                .get_pokemon_learnset(pokemon_name, None, no_cache)
+                .await
+            {
+                Ok(all_entries) if !all_entries.is_empty() => {
+                    if let Some(best_vg) = pick_best_available_vg(&all_entries, all_vgs) {
+                        info!(
+                            "Using best-available fallback {best_vg} for {pokemon_name} learnset"
+                        );
+                        learnset = all_entries
+                            .into_iter()
+                            .filter(|e| e.version_group == best_vg)
+                            .collect();
+                        source_vg = Some(best_vg);
+                    }
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    warn!("Full learnset fetch failed for {pokemon_name}: {e}");
+                }
+            }
+        }
+
+        if learnset.is_empty() {
+            return Ok(());
+        }
+
+        // Record fallback source if different from the primary VGs
+        if let Some(ref vg) = source_vg {
+            if !is_primary_vg(vg) {
+                member.learnset_source_vg = Some(vg.clone());
+            }
         }
 
         // Fetch move details, deduplicating by name
@@ -646,6 +763,64 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
     }
 }
 
+/// Parse a PokeAPI generation name (e.g., "generation-ix") into a numeric value for ordering.
+fn generation_number(gen_name: &str) -> u32 {
+    let suffix = gen_name.strip_prefix("generation-").unwrap_or(gen_name);
+    match suffix {
+        "i" => 1,
+        "ii" => 2,
+        "iii" => 3,
+        "iv" => 4,
+        "v" => 5,
+        "vi" => 6,
+        "vii" => 7,
+        "viii" => 8,
+        "ix" => 9,
+        "x" => 10,
+        _ => 0,
+    }
+}
+
+/// Find version groups in the same generation as `requested_vgs` but not already in that list.
+fn same_generation_fallbacks(
+    requested_vgs: &[String],
+    all_vgs: &[VersionGroupInfo],
+) -> Vec<String> {
+    // Find the generation(s) of the requested VGs
+    let requested_gens: std::collections::HashSet<&str> = all_vgs
+        .iter()
+        .filter(|vg| requested_vgs.contains(&vg.name))
+        .map(|vg| vg.generation.as_str())
+        .collect();
+
+    // Collect sibling VGs in those generations, ordered by descending generation number
+    // (in case of multiple gens), then by VG list order as tiebreak
+    let mut siblings: Vec<&VersionGroupInfo> = all_vgs
+        .iter()
+        .filter(|vg| requested_gens.contains(vg.generation.as_str()))
+        .filter(|vg| !requested_vgs.contains(&vg.name))
+        .collect();
+    siblings
+        .sort_by(|a, b| generation_number(&b.generation).cmp(&generation_number(&a.generation)));
+    siblings.into_iter().map(|vg| vg.name.clone()).collect()
+}
+
+/// From a set of learnset entries spanning multiple VGs, pick the most recent VG
+/// (highest generation number) that has data.
+fn pick_best_available_vg(
+    entries: &[pokeplanner_core::LearnsetEntry],
+    all_vgs: &[VersionGroupInfo],
+) -> Option<String> {
+    let entry_vgs: std::collections::HashSet<&str> =
+        entries.iter().map(|e| e.version_group.as_str()).collect();
+
+    all_vgs
+        .iter()
+        .filter(|vg| entry_vgs.contains(vg.name.as_str()))
+        .max_by_key(|vg| generation_number(&vg.generation))
+        .map(|vg| vg.name.clone())
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -667,6 +842,7 @@ mod tests {
                 name: "test-game".to_string(),
                 versions: vec!["test-v1".to_string()],
                 pokedexes: vec!["test-dex".to_string()],
+                generation: "generation-i".to_string(),
             }])
         }
 
@@ -1177,6 +1353,7 @@ mod tests {
                 name: "test-game".to_string(),
                 versions: vec!["test-v1".to_string()],
                 pokedexes: vec!["test-dex".to_string()],
+                generation: "generation-i".to_string(),
             }])
         }
 
@@ -1438,5 +1615,97 @@ mod tests {
                 _ => continue,
             }
         }
+    }
+
+    #[test]
+    fn test_generation_number_parsing() {
+        assert_eq!(generation_number("generation-i"), 1);
+        assert_eq!(generation_number("generation-iv"), 4);
+        assert_eq!(generation_number("generation-ix"), 9);
+        assert_eq!(generation_number("generation-x"), 10);
+        assert_eq!(generation_number("unknown"), 0);
+    }
+
+    #[test]
+    fn test_same_generation_fallbacks() {
+        let all_vgs = vec![
+            VersionGroupInfo {
+                name: "legends-za".to_string(),
+                versions: vec![],
+                pokedexes: vec![],
+                generation: "generation-ix".to_string(),
+            },
+            VersionGroupInfo {
+                name: "scarlet-violet".to_string(),
+                versions: vec![],
+                pokedexes: vec![],
+                generation: "generation-ix".to_string(),
+            },
+            VersionGroupInfo {
+                name: "sword-shield".to_string(),
+                versions: vec![],
+                pokedexes: vec![],
+                generation: "generation-viii".to_string(),
+            },
+        ];
+
+        let fallbacks = same_generation_fallbacks(&["legends-za".to_string()], &all_vgs);
+        assert_eq!(fallbacks, vec!["scarlet-violet"]);
+
+        // Should not include VGs from other generations
+        assert!(!fallbacks.contains(&"sword-shield".to_string()));
+    }
+
+    #[test]
+    fn test_same_generation_fallbacks_no_siblings() {
+        let all_vgs = vec![VersionGroupInfo {
+            name: "legends-za".to_string(),
+            versions: vec![],
+            pokedexes: vec![],
+            generation: "generation-ix".to_string(),
+        }];
+        let fallbacks = same_generation_fallbacks(&["legends-za".to_string()], &all_vgs);
+        assert!(fallbacks.is_empty());
+    }
+
+    #[test]
+    fn test_pick_best_available_vg() {
+        use pokeplanner_core::LearnMethod;
+        let all_vgs = vec![
+            VersionGroupInfo {
+                name: "red-blue".to_string(),
+                versions: vec![],
+                pokedexes: vec![],
+                generation: "generation-i".to_string(),
+            },
+            VersionGroupInfo {
+                name: "scarlet-violet".to_string(),
+                versions: vec![],
+                pokedexes: vec![],
+                generation: "generation-ix".to_string(),
+            },
+        ];
+        let entries = vec![
+            pokeplanner_core::LearnsetEntry {
+                move_name: "tackle".to_string(),
+                learn_method: LearnMethod::LevelUp,
+                level: 1,
+                version_group: "red-blue".to_string(),
+            },
+            pokeplanner_core::LearnsetEntry {
+                move_name: "thunderbolt".to_string(),
+                learn_method: LearnMethod::Machine,
+                level: 0,
+                version_group: "scarlet-violet".to_string(),
+            },
+        ];
+        let best = pick_best_available_vg(&entries, &all_vgs);
+        assert_eq!(best, Some("scarlet-violet".to_string()));
+    }
+
+    #[test]
+    fn test_pick_best_available_vg_empty() {
+        let best = pick_best_available_vg(&[], &[]);
+        assert_eq!(best, None);
     }
 }
