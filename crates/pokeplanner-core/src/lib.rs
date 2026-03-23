@@ -10,6 +10,6 @@ pub use model::{
     PokemonType,
 };
 pub use team::{
-    PokemonQueryParams, SortField, SortOrder, TeamMember, TeamPlan, TeamPlanRequest, TeamSource,
-    TypeCoverage,
+    filter_sort_limit, sort_pokemon, PokemonQueryParams, SortField, SortOrder, TeamMember,
+    TeamPlan, TeamPlanRequest, TeamSource, TypeCoverage,
 };

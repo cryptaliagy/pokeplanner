@@ -293,6 +293,21 @@ impl TypeChart {
             .collect()
     }
 
+    /// Returns the list of types that at least one team member can hit super-effectively.
+    pub fn covered_types(&self, team_types: &[Vec<PokemonType>]) -> Vec<PokemonType> {
+        PokemonType::ALL
+            .iter()
+            .filter(|&&target_type| {
+                team_types.iter().any(|pokemon_types| {
+                    pokemon_types
+                        .iter()
+                        .any(|&atk_type| self.effectiveness(atk_type, target_type) >= 2.0)
+                })
+            })
+            .copied()
+            .collect()
+    }
+
     // --- Counter-team scoring methods ---
 
     /// Offensive coverage against a specific enemy team.

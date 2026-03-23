@@ -6,7 +6,8 @@ use std::sync::Arc;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use colored::Colorize;
 use pokeplanner_core::{
-    PokemonQueryParams, PokemonType, SortField, SortOrder, TeamPlanRequest, TeamSource,
+    sort_pokemon, PokemonQueryParams, PokemonType, SortField, SortOrder, TeamPlanRequest,
+    TeamSource,
 };
 use pokeplanner_pokeapi::{PokeApiClientConfig, PokeApiHttpClient};
 use pokeplanner_service::PokePlannerService;
@@ -867,29 +868,7 @@ async fn handle_pokemon_action<
 
             // Step 3: Sort and limit
             if let Some(field) = sort_by {
-                let core_field: SortField = field.into();
-                let core_order: SortOrder = sort_order.into();
-                candidates.sort_by(|a, b| {
-                    let cmp = match core_field {
-                        SortField::Bst => a.bst().cmp(&b.bst()),
-                        SortField::Hp => a.stats.hp.cmp(&b.stats.hp),
-                        SortField::Attack => a.stats.attack.cmp(&b.stats.attack),
-                        SortField::Defense => a.stats.defense.cmp(&b.stats.defense),
-                        SortField::SpecialAttack => {
-                            a.stats.special_attack.cmp(&b.stats.special_attack)
-                        }
-                        SortField::SpecialDefense => {
-                            a.stats.special_defense.cmp(&b.stats.special_defense)
-                        }
-                        SortField::Speed => a.stats.speed.cmp(&b.stats.speed),
-                        SortField::Name => a.form_name.cmp(&b.form_name),
-                        SortField::PokedexNumber => a.pokedex_number.cmp(&b.pokedex_number),
-                    };
-                    match core_order {
-                        SortOrder::Asc => cmp,
-                        SortOrder::Desc => cmp.reverse(),
-                    }
-                });
+                sort_pokemon(&mut candidates, field.into(), sort_order.into());
             }
             if let Some(n) = limit {
                 candidates.truncate(n);
@@ -1432,29 +1411,6 @@ fn format_bytes(bytes: u64) -> String {
 // Display helpers
 // ---------------------------------------------------------------------------
 
-fn type_name(t: &PokemonType) -> &'static str {
-    match t {
-        PokemonType::Normal => "normal",
-        PokemonType::Fire => "fire",
-        PokemonType::Water => "water",
-        PokemonType::Electric => "electric",
-        PokemonType::Grass => "grass",
-        PokemonType::Ice => "ice",
-        PokemonType::Fighting => "fighting",
-        PokemonType::Poison => "poison",
-        PokemonType::Ground => "ground",
-        PokemonType::Flying => "flying",
-        PokemonType::Psychic => "psychic",
-        PokemonType::Bug => "bug",
-        PokemonType::Rock => "rock",
-        PokemonType::Ghost => "ghost",
-        PokemonType::Dragon => "dragon",
-        PokemonType::Dark => "dark",
-        PokemonType::Steel => "steel",
-        PokemonType::Fairy => "fairy",
-    }
-}
-
 fn color_type(t: &PokemonType) -> colored::ColoredString {
     let name = format!("{t}");
     match t {
@@ -1625,7 +1581,7 @@ fn print_team_plans(plans: &[pokeplanner_core::TeamPlan]) {
             let p = &member.pokemon;
 
             // Build the types string: pad the plain text width, then colorize
-            let types_plain: Vec<&str> = p.types.iter().map(|t| type_name(t)).collect();
+            let types_plain: Vec<String> = p.types.iter().map(|t| t.to_string()).collect();
             let types_plain_joined = types_plain.join("/");
             let types_colored: Vec<String> = p
                 .types
