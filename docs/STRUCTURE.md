@@ -66,7 +66,15 @@ pokeplanner/
 ├── docs/
 │   ├── ARCHITECTURE.md         # System architecture and data flow
 │   ├── DEPENDENCIES.md         # Dependency choices and rationale
+│   ├── OBSERVABILITY.md        # Observability reference: metrics, tracing, logging, correlation
 │   └── STRUCTURE.md            # This file — repository layout
+├── ops/
+│   └── RUNBOOK.md              # Operational runbook for production incident diagnosis
+├── dashboards/
+│   ├── README.md               # Dashboard import instructions and metric name mapping
+│   ├── overview.json           # Grafana: service health (request rate, latency, job throughput)
+│   ├── pokeapi.json            # Grafana: upstream PokeAPI health (latency, cache hit ratio)
+│   └── jobs.json               # Grafana: job processing (duration, candidate pool, fallbacks)
 ├── tools/                      # Placeholder for additional tooling
 │   └── .gitkeep
 └── frontend/                   # Placeholder for future frontend

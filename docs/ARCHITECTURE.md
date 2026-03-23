@@ -141,6 +141,9 @@ These are one-time costs. Subsequent calls are instant from cache.
 
 ## Observability
 
+> For the complete observability reference (metrics catalog, tracing architecture, correlation model), see [OBSERVABILITY.md](OBSERVABILITY.md).
+> For operational runbooks, see [ops/RUNBOOK.md](../ops/RUNBOOK.md). For Grafana dashboards, see [dashboards/](../dashboards/).
+
 PokePlanner uses a three-pillar observability approach: structured logging, distributed tracing, and metrics — all built on the `tracing` + OpenTelemetry ecosystem.
 
 ### Telemetry initialization (`pokeplanner-telemetry`)

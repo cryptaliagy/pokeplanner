@@ -484,6 +484,7 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
                         &learnset_vgs,
                         &all_vgs,
                         request.no_cache,
+                        &metrics,
                     )
                     .await
                     {
@@ -616,6 +617,7 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
         version_groups: &[String],
         all_vgs: &[VersionGroupInfo],
         no_cache: bool,
+        metrics: &Option<Metrics>,
     ) -> Result<(), AppError> {
         let pokemon_name = &member.pokemon.form_name;
         let is_primary_vg = |vg: &str| version_groups.iter().any(|v| v == vg);
@@ -697,6 +699,9 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
         if let Some(ref vg) = source_vg {
             if !is_primary_vg(vg) {
                 member.learnset_source_vg = Some(vg.clone());
+                if let Some(ref m) = metrics {
+                    m.move_selection_fallback_counter.add(1, &[]);
+                }
             }
         }
 

@@ -24,6 +24,7 @@ use proto::*;
 
 pub struct GrpcHandler {
     service: Arc<PokePlannerService<JsonFileStorage, PokeApiHttpClient>>,
+    metrics: pokeplanner_telemetry::Metrics,
 }
 
 impl GrpcHandler {
@@ -124,6 +125,13 @@ impl GrpcHandler {
             _ => Status::internal(e.to_string()),
         }
     }
+
+    fn record_request(&self, start: std::time::Instant) {
+        self.metrics.request_counter.add(1, &[]);
+        self.metrics
+            .request_duration
+            .record(start.elapsed().as_secs_f64(), &[]);
+    }
 }
 
 #[tonic::async_trait]
@@ -132,7 +140,9 @@ impl GrpcService for GrpcHandler {
         &self,
         _req: Request<HealthRequest>,
     ) -> Result<Response<HealthResponse>, Status> {
+        let start = std::time::Instant::now();
         let h = self.service.health();
+        self.record_request(start);
         Ok(Response::new(HealthResponse {
             status: h.status,
             version: h.version,
@@ -140,7 +150,9 @@ impl GrpcService for GrpcHandler {
     }
 
     async fn ping(&self, req: Request<PingRequest>) -> Result<Response<PingResponse>, Status> {
+        let start = std::time::Instant::now();
         let msg = req.into_inner().message;
+        self.record_request(start);
         Ok(Response::new(PingResponse {
             message: format!("pong: {msg}"),
         }))
@@ -150,11 +162,13 @@ impl GrpcService for GrpcHandler {
         &self,
         _req: Request<SubmitJobRequest>,
     ) -> Result<Response<SubmitJobResponse>, Status> {
+        let start = std::time::Instant::now();
         let job_id = self
             .service
             .submit_job()
             .await
             .map_err(Self::app_error_to_status)?;
+        self.record_request(start);
         Ok(Response::new(SubmitJobResponse {
             job_id: job_id.to_string(),
         }))
@@ -164,6 +178,7 @@ impl GrpcService for GrpcHandler {
         &self,
         req: Request<GetJobRequest>,
     ) -> Result<Response<GetJobResponse>, Status> {
+        let start = std::time::Instant::now();
         let job_id = Uuid::parse_str(&req.into_inner().job_id)
             .map_err(|_| Status::invalid_argument("Invalid job ID"))?;
         let job = self
@@ -171,6 +186,7 @@ impl GrpcService for GrpcHandler {
             .get_job(&job_id)
             .await
             .map_err(Self::app_error_to_status)?;
+        self.record_request(start);
         Ok(Response::new(Self::job_to_proto(&job)))
     }
 
@@ -178,12 +194,14 @@ impl GrpcService for GrpcHandler {
         &self,
         _req: Request<ListJobsRequest>,
     ) -> Result<Response<ListJobsResponse>, Status> {
+        let start = std::time::Instant::now();
         let jobs = self
             .service
             .list_jobs()
             .await
             .map_err(Self::app_error_to_status)?;
         let jobs = jobs.iter().map(Self::job_to_proto).collect();
+        self.record_request(start);
         Ok(Response::new(ListJobsResponse { jobs }))
     }
 
@@ -191,6 +209,7 @@ impl GrpcService for GrpcHandler {
         &self,
         req: Request<GetVersionGroupsRequest>,
     ) -> Result<Response<GetVersionGroupsResponse>, Status> {
+        let start = std::time::Instant::now();
         let inner = req.into_inner();
         let groups = self
             .service
@@ -206,6 +225,7 @@ impl GrpcService for GrpcHandler {
                 generation: g.generation,
             })
             .collect();
+        self.record_request(start);
         Ok(Response::new(GetVersionGroupsResponse { version_groups }))
     }
 
@@ -213,6 +233,7 @@ impl GrpcService for GrpcHandler {
         &self,
         req: Request<GetGamePokemonRequest>,
     ) -> Result<Response<GetGamePokemonResponse>, Status> {
+        let start = std::time::Instant::now();
         let inner = req.into_inner();
         let pokemon = self
             .service
@@ -231,6 +252,7 @@ impl GrpcService for GrpcHandler {
             .map_err(Self::app_error_to_status)?;
         let count = pokemon.len() as u32;
         let pokemon = pokemon.iter().map(Self::pokemon_to_proto).collect();
+        self.record_request(start);
         Ok(Response::new(GetGamePokemonResponse { pokemon, count }))
     }
 
@@ -238,6 +260,7 @@ impl GrpcService for GrpcHandler {
         &self,
         req: Request<GetPokedexPokemonRequest>,
     ) -> Result<Response<GetPokedexPokemonResponse>, Status> {
+        let start = std::time::Instant::now();
         let inner = req.into_inner();
         let pokemon = self
             .service
@@ -256,6 +279,7 @@ impl GrpcService for GrpcHandler {
             .map_err(Self::app_error_to_status)?;
         let count = pokemon.len() as u32;
         let pokemon = pokemon.iter().map(Self::pokemon_to_proto).collect();
+        self.record_request(start);
         Ok(Response::new(GetPokedexPokemonResponse { pokemon, count }))
     }
 
@@ -263,12 +287,14 @@ impl GrpcService for GrpcHandler {
         &self,
         req: Request<GetPokemonRequest>,
     ) -> Result<Response<GetPokemonResponse>, Status> {
+        let start = std::time::Instant::now();
         let inner = req.into_inner();
         let pokemon = self
             .service
             .get_pokemon(&inner.name, inner.no_cache)
             .await
             .map_err(Self::app_error_to_status)?;
+        self.record_request(start);
         Ok(Response::new(GetPokemonResponse {
             pokemon: Some(Self::pokemon_to_proto(&pokemon)),
         }))
@@ -278,6 +304,7 @@ impl GrpcService for GrpcHandler {
         &self,
         req: Request<PlanTeamRequest>,
     ) -> Result<Response<PlanTeamResponse>, Status> {
+        let start = std::time::Instant::now();
         let inner = req.into_inner();
         let source = match inner.source {
             Some(team_source) => match team_source.source {
@@ -315,6 +342,7 @@ impl GrpcService for GrpcHandler {
             .submit_team_plan(request)
             .await
             .map_err(Self::app_error_to_status)?;
+        self.record_request(start);
         Ok(Response::new(PlanTeamResponse {
             job_id: job_id.to_string(),
         }))
@@ -324,6 +352,7 @@ impl GrpcService for GrpcHandler {
         &self,
         req: Request<AnalyzeTeamRequest>,
     ) -> Result<Response<AnalyzeTeamResponse>, Status> {
+        let start = std::time::Instant::now();
         let inner = req.into_inner();
         if inner.pokemon_names.is_empty() {
             return Err(Status::invalid_argument("pokemon_names must not be empty"));
@@ -333,6 +362,7 @@ impl GrpcService for GrpcHandler {
             .analyze_team(inner.pokemon_names, inner.no_cache)
             .await
             .map_err(Self::app_error_to_status)?;
+        self.record_request(start);
         Ok(Response::new(AnalyzeTeamResponse {
             coverage: Some(Self::coverage_to_proto(&coverage)),
         }))
@@ -396,14 +426,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .await
             .expect("Failed to initialize storage"),
     );
+    let metrics = pokeplanner_telemetry::Metrics::from_global();
     let pokeapi = Arc::new(
         PokeApiHttpClient::new(cli.cache_dir)
             .await
-            .expect("Failed to initialize PokeAPI client"),
+            .expect("Failed to initialize PokeAPI client")
+            .with_metrics(metrics.clone()),
     );
-    let service = Arc::new(PokePlannerService::new(storage, pokeapi));
+    let service = Arc::new(PokePlannerService::new(storage, pokeapi).with_metrics(metrics.clone()));
 
-    let handler = GrpcHandler { service };
+    let handler = GrpcHandler { service, metrics };
     let addr = format!("{}:{}", cli.host, cli.port).parse()?;
     tracing::info!("gRPC server listening on {addr}");
 
