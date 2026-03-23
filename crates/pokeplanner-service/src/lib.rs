@@ -449,6 +449,29 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
                     }
                 }
             }
+
+            // Compute move-based type coverage for each plan
+            for plan in &mut plans {
+                let move_types: std::collections::HashSet<PokemonType> = plan
+                    .team
+                    .iter()
+                    .filter_map(|m| m.recommended_moves.as_ref())
+                    .flatten()
+                    .map(|m| m.move_type)
+                    .collect();
+
+                let covered: Vec<PokemonType> = PokemonType::ALL
+                    .iter()
+                    .filter(|&&target| {
+                        move_types
+                            .iter()
+                            .any(|&atk| type_chart.effectiveness(atk, target) >= 2.0)
+                    })
+                    .copied()
+                    .collect();
+
+                plan.type_coverage.move_coverage = Some(covered);
+            }
         }
 
         // Complete
@@ -502,6 +525,7 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
             defensive_weaknesses,
             uncovered_types,
             coverage_score,
+            move_coverage: None,
         })
     }
 

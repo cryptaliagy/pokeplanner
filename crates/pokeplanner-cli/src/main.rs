@@ -6,8 +6,8 @@ use std::sync::Arc;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use colored::Colorize;
 use pokeplanner_core::{
-    sort_pokemon, PokemonQueryParams, PokemonType, SortField, SortOrder, TeamPlanRequest,
-    TeamSource,
+    sort_pokemon, MoveRole, PokemonQueryParams, PokemonType, RecommendedMove, SortField, SortOrder,
+    TeamPlanRequest, TeamSource,
 };
 use pokeplanner_pokeapi::{PokeApiClientConfig, PokeApiHttpClient};
 use pokeplanner_service::PokePlannerService;
@@ -1449,6 +1449,98 @@ fn colored_type_list(types: &[PokemonType]) -> String {
         .join(", ")
 }
 
+/// Strip ANSI escape codes from a string (for measuring plain text width).
+fn strip_ansi(s: &str) -> String {
+    let mut result = String::new();
+    let mut in_escape = false;
+    for c in s.chars() {
+        if c == '\x1b' {
+            in_escape = true;
+        } else if in_escape {
+            if c.is_ascii_alphabetic() {
+                in_escape = false;
+            }
+        } else {
+            result.push(c);
+        }
+    }
+    result
+}
+
+/// Format a list of recommended moves with role annotations.
+/// Returns a Vec of formatted move strings (with ANSI colors).
+fn format_recommended_moves(moves: &[RecommendedMove]) -> Vec<String> {
+    moves
+        .iter()
+        .map(|m| {
+            let role_str = match &m.role {
+                MoveRole::Stab => "STAB".to_string(),
+                MoveRole::WeaknessCoverage(types) => {
+                    let type_names: Vec<String> = types.iter().map(capitalize_type).collect();
+                    format!("->{}", type_names.join(","))
+                }
+                MoveRole::MirrorCoverage => "mirror".to_string(),
+            };
+            format!(
+                "{} ({}, {})",
+                m.move_name,
+                color_type(&m.move_type),
+                role_str
+            )
+        })
+        .collect()
+}
+
+/// Capitalize the first letter of a type name for display in move annotations.
+fn capitalize_type(t: &PokemonType) -> String {
+    let s = t.to_string();
+    let mut chars = s.chars();
+    match chars.next() {
+        None => String::new(),
+        Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
+    }
+}
+
+/// Compute the types a pokemon hits super-effectively with its STAB types.
+fn pokemon_offensive_strengths(
+    types: &[PokemonType],
+    chart: &pokeplanner_service::type_chart::TypeChart,
+) -> Vec<PokemonType> {
+    PokemonType::ALL
+        .iter()
+        .filter(|&&target| {
+            types
+                .iter()
+                .any(|&atk| chart.effectiveness(atk, target) >= 2.0)
+        })
+        .copied()
+        .collect()
+}
+
+/// Compute the types a pokemon resists (takes ≤0.5x damage from).
+fn pokemon_resistances(
+    types: &[PokemonType],
+    chart: &pokeplanner_service::type_chart::TypeChart,
+) -> Vec<PokemonType> {
+    PokemonType::ALL
+        .iter()
+        .filter(|&&atk| chart.effectiveness_against_pokemon(atk, types) <= 0.5)
+        .copied()
+        .collect()
+}
+
+/// Compute the types a pokemon is immune to (takes 0x damage from).
+fn pokemon_immunities(
+    types: &[PokemonType],
+    chart: &pokeplanner_service::type_chart::TypeChart,
+) -> Vec<PokemonType> {
+    PokemonType::ALL
+        .iter()
+        .filter(|&&atk| chart.effectiveness_against_pokemon(atk, types) == 0.0)
+        .copied()
+        .collect()
+}
+
 /// Render a stat bar: filled portion + dimmed remainder, fixed width.
 fn stat_bar(value: u32, max: u32, width: usize) -> String {
     let filled = ((value as f64 / max as f64) * width as f64).round() as usize;
@@ -1503,6 +1595,8 @@ fn print_pokemon_list(pokemon: &[pokeplanner_core::Pokemon], unusable: &Unusable
 }
 
 fn print_pokemon_detail(p: &pokeplanner_core::Pokemon, unusable: &UnusableStore) {
+    let chart = pokeplanner_service::type_chart::TypeChart::fallback();
+
     let types_display: Vec<String> = p
         .types
         .iter()
@@ -1547,6 +1641,49 @@ fn print_pokemon_detail(p: &pokeplanner_core::Pokemon, unusable: &UnusableStore)
     }
     println!("  {} {}", "BST".dimmed(), p.bst().to_string().bold(),);
     println!();
+
+    // Type effectiveness
+    let (weak_2x, weak_4x) = chart.pokemon_weaknesses(&p.types);
+    let strengths = pokemon_offensive_strengths(&p.types, &chart);
+    let resistances = pokemon_resistances(&p.types, &chart);
+    let immunities = pokemon_immunities(&p.types, &chart);
+
+    if !weak_4x.is_empty() {
+        println!(
+            "  {} {}",
+            "4x weak to:".red().bold(),
+            colored_type_list(&weak_4x)
+        );
+    }
+    if !weak_2x.is_empty() {
+        println!(
+            "  {} {}",
+            "2x weak to:".yellow(),
+            colored_type_list(&weak_2x)
+        );
+    }
+    if !resistances.is_empty() {
+        println!(
+            "  {} {}",
+            "Resists:".green(),
+            colored_type_list(&resistances)
+        );
+    }
+    if !immunities.is_empty() {
+        println!(
+            "  {} {}",
+            "Immune to:".cyan().bold(),
+            colored_type_list(&immunities)
+        );
+    }
+    if !strengths.is_empty() {
+        println!(
+            "  {} {}",
+            "Strong vs:".green().bold(),
+            colored_type_list(&strengths)
+        );
+    }
+    println!();
 }
 
 fn print_team_plans(plans: &[pokeplanner_core::TeamPlan]) {
@@ -1554,6 +1691,8 @@ fn print_team_plans(plans: &[pokeplanner_core::TeamPlan]) {
         println!("No team plans generated.");
         return;
     }
+
+    let chart = pokeplanner_service::type_chart::TypeChart::fallback();
 
     for (i, plan) in plans.iter().enumerate() {
         let rank = i + 1;
@@ -1632,21 +1771,52 @@ fn print_team_plans(plans: &[pokeplanner_core::TeamPlan]) {
                 println!("  {:<25} {}", "", weakness_parts.join("  "));
             }
 
-            // Recommended moves
+            // Per-pokemon offensive strengths (types hit SE by STAB)
+            let strengths = pokemon_offensive_strengths(&p.types, &chart);
+            if !strengths.is_empty() {
+                println!(
+                    "  {:<25} {} {}",
+                    "",
+                    "Strong vs:".green().bold(),
+                    colored_type_list(&strengths)
+                );
+            }
+
+            // Recommended moves (with role annotations and damage class)
             if let Some(ref moves) = member.recommended_moves {
-                let moves_str: Vec<String> = moves
-                    .iter()
-                    .map(|m| {
-                        let power_str = format!("{}p", m.power);
-                        format!(
-                            "{} ({} {})",
-                            m.move_name,
-                            color_type(&m.move_type),
-                            power_str
-                        )
-                    })
-                    .collect();
-                println!("  {:<25} {} {}", "", "Moves:".bold(), moves_str.join(", "));
+                if !moves.is_empty() {
+                    let formatted = format_recommended_moves(moves);
+                    // First line includes "Moves (class):" prefix
+                    let damage_class = &moves[0].damage_class;
+                    let prefix = format!("{} ", format!("Moves ({damage_class}):").bold());
+                    // Wrap moves across lines at ~80 chars
+                    let indent = " ".repeat(27);
+                    let max_line = 80usize.saturating_sub(27);
+                    let mut lines: Vec<String> = Vec::new();
+                    let mut current_line = String::new();
+                    for (i, part) in formatted.iter().enumerate() {
+                        let separator = if i > 0 { ", " } else { "" };
+                        let plain_len = strip_ansi(&current_line).len()
+                            + strip_ansi(part).len()
+                            + separator.len();
+                        if !current_line.is_empty() && plain_len > max_line {
+                            lines.push(current_line);
+                            current_line = part.clone();
+                        } else {
+                            current_line = format!("{current_line}{separator}{part}");
+                        }
+                    }
+                    if !current_line.is_empty() {
+                        lines.push(current_line);
+                    }
+                    for (j, line) in lines.iter().enumerate() {
+                        if j == 0 {
+                            println!("  {:<25} {prefix}{line}", "");
+                        } else {
+                            println!("  {indent}  {line}");
+                        }
+                    }
+                }
             }
         }
 
@@ -1689,6 +1859,37 @@ fn print_team_plans(plans: &[pokeplanner_core::TeamPlan]) {
                 "Shared weaknesses:".dimmed(),
                 colored_type_list(&cov.defensive_weaknesses)
             );
+        }
+
+        // Move coverage summary (only when move selection was performed)
+        if let Some(ref move_cov) = cov.move_coverage {
+            let covered_count = move_cov.len();
+            let total_types = PokemonType::ALL.len();
+            let pct = (covered_count as f64 / total_types as f64) * 100.0;
+            let pct_display = if pct >= 80.0 {
+                format!("{pct:.0}%").green()
+            } else if pct >= 50.0 {
+                format!("{pct:.0}%").yellow()
+            } else {
+                format!("{pct:.0}%").red()
+            };
+            println!(
+                "  {} {pct_display} ({covered_count}/{total_types} types hit SE by moves)",
+                "Move coverage:".bold(),
+            );
+
+            let uncovered_by_moves: Vec<PokemonType> = PokemonType::ALL
+                .iter()
+                .filter(|t| !move_cov.contains(t))
+                .copied()
+                .collect();
+            if !uncovered_by_moves.is_empty() {
+                println!(
+                    "    {} {}",
+                    "Not covered by moves:".dimmed(),
+                    colored_type_list(&uncovered_by_moves)
+                );
+            }
         }
     }
     println!();
@@ -1749,5 +1950,141 @@ mod tests {
     fn test_parse_stat_filter_invalid() {
         assert!(parse_stat_filter("geabc").is_err());
         assert!(parse_stat_filter("").is_err());
+    }
+
+    #[test]
+    fn test_format_recommended_moves_stab_and_coverage() {
+        let moves = vec![
+            RecommendedMove {
+                move_name: "fire-blast".into(),
+                move_type: PokemonType::Fire,
+                power: 110,
+                damage_class: "special".into(),
+                role: MoveRole::Stab,
+            },
+            RecommendedMove {
+                move_name: "air-slash".into(),
+                move_type: PokemonType::Flying,
+                power: 75,
+                damage_class: "special".into(),
+                role: MoveRole::Stab,
+            },
+            RecommendedMove {
+                move_name: "dragon-pulse".into(),
+                move_type: PokemonType::Dragon,
+                power: 85,
+                damage_class: "special".into(),
+                role: MoveRole::WeaknessCoverage(vec![PokemonType::Rock, PokemonType::Dragon]),
+            },
+            RecommendedMove {
+                move_name: "solar-beam".into(),
+                move_type: PokemonType::Grass,
+                power: 120,
+                damage_class: "special".into(),
+                role: MoveRole::WeaknessCoverage(vec![
+                    PokemonType::Water,
+                    PokemonType::Rock,
+                    PokemonType::Ground,
+                ]),
+            },
+        ];
+        let output = format_recommended_moves(&moves);
+        let plain: Vec<String> = output.iter().map(|s| strip_ansi(s)).collect();
+        assert!(plain[0].contains("fire-blast"));
+        assert!(plain[0].contains("STAB"));
+        assert!(plain[1].contains("air-slash"));
+        assert!(plain[1].contains("STAB"));
+        assert!(plain[2].contains("dragon-pulse"));
+        assert!(plain[2].contains("->Rock,Dragon"));
+        assert!(plain[3].contains("solar-beam"));
+        assert!(plain[3].contains("->Water,Rock,Ground"));
+    }
+
+    #[test]
+    fn test_format_recommended_moves_none_graceful() {
+        // When recommended_moves is None, no formatting happens — just verify
+        // the format function handles empty input
+        let output = format_recommended_moves(&[]);
+        assert!(output.is_empty());
+    }
+
+    #[test]
+    fn test_format_recommended_moves_mirror_coverage() {
+        let moves = vec![RecommendedMove {
+            move_name: "shadow-ball".into(),
+            move_type: PokemonType::Ghost,
+            power: 80,
+            damage_class: "special".into(),
+            role: MoveRole::MirrorCoverage,
+        }];
+        let output = format_recommended_moves(&moves);
+        let plain = strip_ansi(&output[0]);
+        assert!(plain.contains("shadow-ball"));
+        assert!(plain.contains("mirror"));
+    }
+
+    #[test]
+    fn test_format_recommended_moves_weakness_coverage_notation() {
+        let moves = vec![RecommendedMove {
+            move_name: "ice-beam".into(),
+            move_type: PokemonType::Ice,
+            power: 90,
+            damage_class: "special".into(),
+            role: MoveRole::WeaknessCoverage(vec![PokemonType::Ground]),
+        }];
+        let output = format_recommended_moves(&moves);
+        let plain = strip_ansi(&output[0]);
+        assert!(plain.contains("->Ground"));
+    }
+
+    #[test]
+    fn test_capitalize_type() {
+        assert_eq!(capitalize_type(&PokemonType::Fire), "Fire");
+        assert_eq!(capitalize_type(&PokemonType::Water), "Water");
+        assert_eq!(capitalize_type(&PokemonType::Electric), "Electric");
+    }
+
+    #[test]
+    fn test_strip_ansi() {
+        let colored = "\x1b[31mfire\x1b[0m";
+        assert_eq!(strip_ansi(colored), "fire");
+        assert_eq!(strip_ansi("plain text"), "plain text");
+    }
+
+    #[test]
+    fn test_pokemon_offensive_strengths_fire_flying() {
+        let chart = pokeplanner_service::type_chart::TypeChart::fallback();
+        let types = vec![PokemonType::Fire, PokemonType::Flying];
+        let strengths = pokemon_offensive_strengths(&types, &chart);
+        // Fire is SE against Grass, Ice, Bug, Steel
+        // Flying is SE against Grass, Fighting, Bug
+        assert!(strengths.contains(&PokemonType::Grass));
+        assert!(strengths.contains(&PokemonType::Ice));
+        assert!(strengths.contains(&PokemonType::Bug));
+        assert!(strengths.contains(&PokemonType::Steel));
+        assert!(strengths.contains(&PokemonType::Fighting));
+        // Should not include types that aren't hit SE
+        assert!(!strengths.contains(&PokemonType::Water));
+        assert!(!strengths.contains(&PokemonType::Dragon));
+    }
+
+    #[test]
+    fn test_pokemon_resistances_steel() {
+        let chart = pokeplanner_service::type_chart::TypeChart::fallback();
+        let types = vec![PokemonType::Steel];
+        let resistances = pokemon_resistances(&types, &chart);
+        // Steel resists many types
+        assert!(resistances.contains(&PokemonType::Normal));
+        assert!(resistances.contains(&PokemonType::Fairy));
+        assert!(resistances.contains(&PokemonType::Ice));
+    }
+
+    #[test]
+    fn test_pokemon_immunities_ghost() {
+        let chart = pokeplanner_service::type_chart::TypeChart::fallback();
+        let types = vec![PokemonType::Ghost];
+        let immunities = pokemon_immunities(&types, &chart);
+        assert!(immunities.contains(&PokemonType::Normal));
+        assert!(immunities.contains(&PokemonType::Fighting));
     }
 }

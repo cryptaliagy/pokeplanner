@@ -55,6 +55,11 @@ impl GrpcHandler {
                 .collect(),
             uncovered_types: c.uncovered_types.iter().map(|t| t.to_string()).collect(),
             coverage_score: c.coverage_score,
+            move_coverage: c
+                .move_coverage
+                .as_ref()
+                .map(|types| types.iter().map(|t| t.to_string()).collect())
+                .unwrap_or_default(),
         }
     }
 

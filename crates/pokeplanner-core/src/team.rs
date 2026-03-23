@@ -93,6 +93,10 @@ pub struct TypeCoverage {
     pub defensive_weaknesses: Vec<PokemonType>,
     pub uncovered_types: Vec<PokemonType>,
     pub coverage_score: f64,
+    /// Types that the team's recommended moves can hit super-effectively.
+    /// `None` when move selection was not performed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub move_coverage: Option<Vec<PokemonType>>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

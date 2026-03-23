@@ -266,6 +266,7 @@ impl<'a> TeamPlanner<'a> {
                 defensive_weaknesses,
                 uncovered_types,
                 coverage_score: offensive_score,
+                move_coverage: None,
             },
             score,
         }

@@ -145,7 +145,7 @@ Jobs are submitted, assigned a UUID, and processed asynchronously via `tokio::sp
 | `pokemon search [filters]` | Search pokemon by type, stats, name, game, variant type (see below) |
 | `moves show <name>` | Get detailed move info (type, power, accuracy, pp, effect) |
 | `moves search <pokemon>` | Search a pokemon's learnset (`--game`, `--type`, `--damage-class`, `--min-power`, `--learn-method`, `--sort-by`) |
-| `plan-team` | Plan optimal team (`--game` (CSV) or `--pokedex` or `--pokemon`, `--min-bst`, `--top-k`, `--exclude-variant-type`, `--learnset-game`) |
+| `plan-team` | Plan optimal team (`--game` (CSV) or `--pokedex` or `--pokemon`, `--min-bst`, `--top-k`, `--exclude-variant-type`, `--learnset-game`). Output shows per-member moves with role annotations (STAB, ->WeaknessType, mirror), damage class, and team-level move coverage summary |
 | `analyze-team <names>` | Analyze type coverage |
 | `cache stats` | Show cache statistics (entry counts, sizes, location) |
 | `cache populate games` | Pre-fetch all version group metadata |

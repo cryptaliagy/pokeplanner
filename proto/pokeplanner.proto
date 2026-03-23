@@ -57,6 +57,7 @@ message TypeCoverage {
   repeated string defensive_weaknesses = 2;
   repeated string uncovered_types = 3;
   double coverage_score = 4;
+  repeated string move_coverage = 5;
 }
 
 // --- Job messages ---
