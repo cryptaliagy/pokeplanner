@@ -182,7 +182,7 @@ async fn make_app() -> axum::Router {
     let storage = Arc::new(JsonFileStorage::new(dir.keep()).await.unwrap());
     let pokeapi = Arc::new(MockPokeApi);
     let service = Arc::new(PokePlannerService::new(storage, pokeapi));
-    create_router(service)
+    create_router(service, None)
 }
 
 async fn body_json(resp: axum::response::Response) -> Value {

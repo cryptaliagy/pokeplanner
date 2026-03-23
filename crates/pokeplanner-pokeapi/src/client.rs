@@ -7,6 +7,7 @@ use governor::{Quota, RateLimiter};
 use pokeplanner_core::{
     AppError, BaseStats, LearnMethod, LearnsetEntry, Move, MoveStatChange, Pokemon, PokemonType,
 };
+use pokeplanner_telemetry::Metrics;
 use tracing::{debug, warn};
 
 use crate::cache::DiskCache;
@@ -56,6 +57,7 @@ pub struct PokeApiHttpClient {
     rate_limiter: Arc<DefaultRateLimiter>,
     base_url: String,
     concurrent_requests: usize,
+    metrics: Option<Metrics>,
 }
 
 impl PokeApiHttpClient {
@@ -78,7 +80,14 @@ impl PokeApiHttpClient {
             rate_limiter,
             base_url: config.base_url,
             concurrent_requests: config.concurrent_requests.max(1),
+            metrics: None,
         })
+    }
+
+    /// Attach metrics instruments for recording PokeAPI client telemetry.
+    pub fn with_metrics(mut self, metrics: Metrics) -> Self {
+        self.metrics = Some(metrics);
+        self
     }
 
     /// Returns a reference to the underlying disk cache for management operations.
@@ -101,6 +110,9 @@ impl PokeApiHttpClient {
             .get::<T>(cache_category, cache_key, no_cache)
             .await
         {
+            if let Some(ref m) = self.metrics {
+                m.pokeapi_cache_hit_counter.add(1, &[]);
+            }
             debug!(
                 url,
                 cache_category,
@@ -115,6 +127,10 @@ impl PokeApiHttpClient {
         // Rate limit
         self.rate_limiter.until_ready().await;
 
+        if let Some(ref m) = self.metrics {
+            m.pokeapi_cache_miss_counter.add(1, &[]);
+            m.pokeapi_request_counter.add(1, &[]);
+        }
         debug!(
             url,
             cache_category,
@@ -141,6 +157,10 @@ impl PokeApiHttpClient {
             .await
             .map_err(|e| AppError::PokeApi(format!("Failed to deserialize response: {e}")))?;
 
+        if let Some(ref m) = self.metrics {
+            m.pokeapi_request_duration
+                .record(start.elapsed().as_secs_f64(), &[]);
+        }
         debug!(
             url,
             cache_category,

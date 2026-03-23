@@ -1489,6 +1489,7 @@ dependencies = [
  "futures",
  "governor",
  "pokeplanner-core",
+ "pokeplanner-telemetry",
  "reqwest 0.13.2",
  "serde",
  "serde_json",

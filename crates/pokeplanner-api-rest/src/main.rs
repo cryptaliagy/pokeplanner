@@ -66,14 +66,16 @@ async fn main() {
             .await
             .expect("Failed to initialize storage"),
     );
+    let metrics = pokeplanner_telemetry::Metrics::from_global();
     let pokeapi = Arc::new(
         PokeApiHttpClient::new(cli.cache_dir)
             .await
-            .expect("Failed to initialize PokeAPI client"),
+            .expect("Failed to initialize PokeAPI client")
+            .with_metrics(metrics.clone()),
     );
-    let service = Arc::new(PokePlannerService::new(storage, pokeapi));
+    let service = Arc::new(PokePlannerService::new(storage, pokeapi).with_metrics(metrics.clone()));
 
-    let app = create_router(service);
+    let app = create_router(service, Some(metrics));
 
     let addr = format!("{}:{}", cli.host, cli.port);
     let listener = tokio::net::TcpListener::bind(&addr)

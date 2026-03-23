@@ -3,6 +3,7 @@ use std::sync::Arc;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
+    middleware::Next,
     response::IntoResponse,
     routing::{get, post},
     Json, Router,
@@ -11,6 +12,7 @@ use pokeplanner_core::{
     AppError, HealthResponse, PokemonQueryParams, SortField, SortOrder, TeamPlanRequest,
 };
 use pokeplanner_service::PokePlannerService;
+use pokeplanner_telemetry::Metrics;
 use serde::Deserialize;
 use serde_json::json;
 use tower_http::trace::TraceLayer;
@@ -18,8 +20,9 @@ use uuid::Uuid;
 
 pub fn create_router<S: pokeplanner_storage::Storage, P: pokeplanner_pokeapi::PokeApiClient>(
     service: Arc<PokePlannerService<S, P>>,
+    metrics: Option<Metrics>,
 ) -> Router {
-    Router::new()
+    let router = Router::new()
         .route("/health", get(health::<S, P>))
         .route("/jobs", post(submit_job::<S, P>))
         .route("/jobs", get(list_jobs::<S, P>))
@@ -33,8 +36,32 @@ pub fn create_router<S: pokeplanner_storage::Storage, P: pokeplanner_pokeapi::Po
         .route("/pokemon/{name}", get(get_pokemon::<S, P>))
         .route("/teams/plan", post(plan_team::<S, P>))
         .route("/teams/analyze", post(analyze_team::<S, P>))
-        .layer(TraceLayer::new_for_http())
-        .with_state(service)
+        .with_state(service);
+
+    let router = if let Some(metrics) = metrics {
+        router.layer(axum::middleware::from_fn_with_state(
+            Arc::new(metrics),
+            request_metrics_middleware,
+        ))
+    } else {
+        router
+    };
+
+    router.layer(TraceLayer::new_for_http())
+}
+
+async fn request_metrics_middleware(
+    State(metrics): State<Arc<Metrics>>,
+    request: axum::http::Request<axum::body::Body>,
+    next: Next,
+) -> impl IntoResponse {
+    let start = std::time::Instant::now();
+    metrics.request_counter.add(1, &[]);
+    let response = next.run(request).await;
+    metrics
+        .request_duration
+        .record(start.elapsed().as_secs_f64(), &[]);
+    response
 }
 
 async fn health<S: pokeplanner_storage::Storage, P: pokeplanner_pokeapi::PokeApiClient>(
@@ -322,7 +349,7 @@ mod tests {
         let storage = Arc::new(JsonFileStorage::new(dir.keep()).await.unwrap());
         let pokeapi = Arc::new(MockPokeApi);
         let service = Arc::new(PokePlannerService::new(storage, pokeapi));
-        create_router(service)
+        create_router(service, None)
     }
 
     #[tokio::test]

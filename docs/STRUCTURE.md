@@ -65,8 +65,19 @@ pokeplanner/
 │       └── type-chart/         # Computed type effectiveness matrix
 ├── docs/
 │   ├── ARCHITECTURE.md         # System architecture and data flow
+│   ├── CACHING.md              # Caching strategy, rate limiting, cache CLI
+│   ├── COST_FUNCTION.md        # Team scoring algorithm (offensive + defensive + BST)
 │   ├── DEPENDENCIES.md         # Dependency choices and rationale
+│   ├── FAQ.md                  # Frequently asked questions
+│   ├── OBSERVABILITY.md        # Observability reference: metrics, tracing, logging, correlation
 │   └── STRUCTURE.md            # This file — repository layout
+├── ops/
+│   └── RUNBOOK.md              # Operational runbook for production incident diagnosis
+├── dashboards/
+│   ├── README.md               # Dashboard import instructions and metric name mapping
+│   ├── overview.json           # Grafana: service health (request rate, latency, job throughput)
+│   ├── pokeapi.json            # Grafana: upstream PokeAPI health (latency, cache hit ratio)
+│   └── jobs.json               # Grafana: job processing (duration, candidate pool, fallbacks)
 ├── tools/                      # Placeholder for additional tooling
 │   └── .gitkeep
 └── frontend/                   # Placeholder for future frontend
