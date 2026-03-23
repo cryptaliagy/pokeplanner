@@ -5,7 +5,7 @@ use std::sync::Arc;
 use futures::stream::{self, StreamExt};
 use governor::{Quota, RateLimiter};
 use pokeplanner_core::{
-    AppError, BaseStats, LearnMethod, LearnsetEntry, Move, Pokemon, PokemonType,
+    AppError, BaseStats, LearnMethod, LearnsetEntry, Move, MoveStatChange, Pokemon, PokemonType,
 };
 use tracing::{debug, warn};
 
@@ -572,6 +572,26 @@ impl PokeApiClient for PokeApiHttpClient {
             })
             .map(|e| e.short_effect.clone());
 
+        let drain = resp.meta.as_ref().map(|m| m.drain).unwrap_or(0);
+        let stat_chance = resp.meta.as_ref().map(|m| m.stat_chance).unwrap_or(0);
+
+        // stat_chance == 0 means "always applies" in PokeAPI convention.
+        // stat_chance >= 100 also means guaranteed.
+        let guaranteed = stat_chance == 0 || stat_chance >= 100;
+
+        let self_stat_changes = if guaranteed {
+            resp.stat_changes
+                .iter()
+                .filter(|sc| sc.change < 0)
+                .map(|sc| MoveStatChange {
+                    stat: sc.stat.name.clone(),
+                    change: sc.change,
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+
         Ok(Move {
             name: resp.name,
             move_type,
@@ -581,8 +601,157 @@ impl PokeApiClient for PokeApiHttpClient {
             damage_class: resp.damage_class.name,
             priority: resp.priority,
             effect,
-            drain: 0,
-            self_stat_changes: Vec::new(),
+            drain,
+            self_stat_changes,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{MoveMeta, MoveStatChangeResponse, NamedApiResource};
+
+    /// Helper to build a MoveResponse with the given meta and stat_changes.
+    fn make_move_response(
+        meta: Option<MoveMeta>,
+        stat_changes: Vec<MoveStatChangeResponse>,
+    ) -> MoveResponse {
+        MoveResponse {
+            id: 1,
+            name: "test-move".to_string(),
+            type_info: NamedApiResource {
+                name: "fire".to_string(),
+                url: String::new(),
+            },
+            power: Some(100),
+            accuracy: Some(100),
+            pp: Some(10),
+            damage_class: NamedApiResource {
+                name: "special".to_string(),
+                url: String::new(),
+            },
+            priority: 0,
+            effect_entries: Vec::new(),
+            meta,
+            stat_changes,
+        }
+    }
+
+    fn make_meta(drain: i32, stat_chance: i32) -> MoveMeta {
+        MoveMeta {
+            drain,
+            healing: 0,
+            crit_rate: 0,
+            ailment_chance: 0,
+            flinch_chance: 0,
+            stat_chance,
+        }
+    }
+
+    fn make_stat_change(stat: &str, change: i32) -> MoveStatChangeResponse {
+        MoveStatChangeResponse {
+            change,
+            stat: NamedApiResource {
+                name: stat.to_string(),
+                url: String::new(),
+            },
+        }
+    }
+
+    #[test]
+    fn test_mapping_drain_from_meta() {
+        let resp = make_move_response(Some(make_meta(-25, 0)), Vec::new());
+        let drain = resp.meta.as_ref().map(|m| m.drain).unwrap_or(0);
+        assert_eq!(drain, -25);
+    }
+
+    #[test]
+    fn test_mapping_drain_defaults_without_meta() {
+        let resp = make_move_response(None, Vec::new());
+        let drain = resp.meta.as_ref().map(|m| m.drain).unwrap_or(0);
+        assert_eq!(drain, 0);
+    }
+
+    #[test]
+    fn test_mapping_guaranteed_self_debuff_stat_chance_zero() {
+        // stat_chance == 0 means guaranteed in PokeAPI
+        let resp = make_move_response(
+            Some(make_meta(0, 0)),
+            vec![make_stat_change("special-attack", -2)],
+        );
+        let stat_chance = resp.meta.as_ref().map(|m| m.stat_chance).unwrap_or(0);
+        let guaranteed = stat_chance == 0 || stat_chance >= 100;
+        assert!(guaranteed);
+
+        let self_stat_changes: Vec<MoveStatChange> = resp
+            .stat_changes
+            .iter()
+            .filter(|sc| sc.change < 0)
+            .map(|sc| MoveStatChange {
+                stat: sc.stat.name.clone(),
+                change: sc.change,
+            })
+            .collect();
+        assert_eq!(self_stat_changes.len(), 1);
+        assert_eq!(self_stat_changes[0].stat, "special-attack");
+        assert_eq!(self_stat_changes[0].change, -2);
+    }
+
+    #[test]
+    fn test_mapping_non_guaranteed_debuff_excluded() {
+        // stat_chance == 30 means 30% probability — not guaranteed, so excluded
+        let resp = make_move_response(
+            Some(make_meta(0, 30)),
+            vec![make_stat_change("defense", -1)],
+        );
+        let stat_chance = resp.meta.as_ref().map(|m| m.stat_chance).unwrap_or(0);
+        let guaranteed = stat_chance == 0 || stat_chance >= 100;
+        assert!(!guaranteed);
+
+        let self_stat_changes: Vec<MoveStatChange> = if guaranteed {
+            resp.stat_changes
+                .iter()
+                .filter(|sc| sc.change < 0)
+                .map(|sc| MoveStatChange {
+                    stat: sc.stat.name.clone(),
+                    change: sc.change,
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        assert!(self_stat_changes.is_empty());
+    }
+
+    #[test]
+    fn test_mapping_positive_stat_changes_excluded() {
+        // Positive changes (boosts) should not appear in self_stat_changes
+        let resp = make_move_response(
+            Some(make_meta(0, 0)),
+            vec![
+                make_stat_change("attack", 2),
+                make_stat_change("defense", -1),
+            ],
+        );
+        let self_stat_changes: Vec<MoveStatChange> = resp
+            .stat_changes
+            .iter()
+            .filter(|sc| sc.change < 0)
+            .map(|sc| MoveStatChange {
+                stat: sc.stat.name.clone(),
+                change: sc.change,
+            })
+            .collect();
+        assert_eq!(self_stat_changes.len(), 1);
+        assert_eq!(self_stat_changes[0].stat, "defense");
+    }
+
+    #[test]
+    fn test_mapping_stat_chance_100_is_guaranteed() {
+        let resp = make_move_response(Some(make_meta(0, 100)), vec![make_stat_change("speed", -1)]);
+        let stat_chance = resp.meta.as_ref().map(|m| m.stat_chance).unwrap_or(0);
+        let guaranteed = stat_chance == 0 || stat_chance >= 100;
+        assert!(guaranteed);
     }
 }

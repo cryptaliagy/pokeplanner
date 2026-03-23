@@ -111,6 +111,29 @@ pub struct MoveEffectEntry {
     pub language: NamedApiResource,
 }
 
+/// Metadata from the PokeAPI `meta` object on a move response.
+///
+/// - `drain`: percentage of damage drained as HP. Negative = recoil (user loses HP),
+///   positive = HP drain (user recovers HP), 0 = neither.
+/// - `stat_chance`: probability that the move's `stat_changes` apply. **0 means guaranteed**
+///   (not "never") — this is PokeAPI's convention. Values 1–99 are probabilities; ≥100 is guaranteed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MoveMeta {
+    pub drain: i32,
+    pub healing: i32,
+    pub crit_rate: i32,
+    pub ailment_chance: i32,
+    pub flinch_chance: i32,
+    pub stat_chance: i32,
+}
+
+/// A stat change entry from the top-level `stat_changes` array on a move response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MoveStatChangeResponse {
+    pub change: i32,
+    pub stat: NamedApiResource,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MoveResponse {
     pub id: u32,
@@ -124,6 +147,10 @@ pub struct MoveResponse {
     pub priority: i32,
     #[serde(default)]
     pub effect_entries: Vec<MoveEffectEntry>,
+    #[serde(default)]
+    pub meta: Option<MoveMeta>,
+    #[serde(default)]
+    pub stat_changes: Vec<MoveStatChangeResponse>,
 }
 
 // --- Type ---
@@ -199,5 +226,82 @@ mod tests {
         assert_eq!(vg.name, "red-blue");
         assert_eq!(vg.pokedexes.len(), 1);
         assert_eq!(vg.versions.len(), 2);
+    }
+
+    #[test]
+    fn test_move_meta_deser() {
+        let json = r#"{
+            "drain": -25,
+            "healing": 0,
+            "crit_rate": 0,
+            "ailment_chance": 0,
+            "flinch_chance": 0,
+            "stat_chance": 0
+        }"#;
+        let meta: MoveMeta = serde_json::from_str(json).unwrap();
+        assert_eq!(meta.drain, -25);
+        assert_eq!(meta.stat_chance, 0);
+    }
+
+    #[test]
+    fn test_move_stat_change_response_deser() {
+        let json = r#"{
+            "change": -2,
+            "stat": {"name": "special-attack", "url": ""}
+        }"#;
+        let sc: MoveStatChangeResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(sc.change, -2);
+        assert_eq!(sc.stat.name, "special-attack");
+    }
+
+    #[test]
+    fn test_move_response_with_meta_and_stat_changes() {
+        let json = r#"{
+            "id": 315, "name": "overheat",
+            "type": {"name": "fire", "url": ""},
+            "power": 130, "accuracy": 90, "pp": 5,
+            "damage_class": {"name": "special", "url": ""},
+            "priority": 0, "effect_entries": [],
+            "meta": {"drain": 0, "healing": 0, "crit_rate": 0, "ailment_chance": 0, "flinch_chance": 0, "stat_chance": 0},
+            "stat_changes": [{"change": -2, "stat": {"name": "special-attack", "url": ""}}]
+        }"#;
+        let resp: MoveResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.name, "overheat");
+        let meta = resp.meta.unwrap();
+        assert_eq!(meta.stat_chance, 0);
+        assert_eq!(meta.drain, 0);
+        assert_eq!(resp.stat_changes.len(), 1);
+        assert_eq!(resp.stat_changes[0].change, -2);
+        assert_eq!(resp.stat_changes[0].stat.name, "special-attack");
+    }
+
+    #[test]
+    fn test_move_response_without_meta_backward_compat() {
+        let json = r#"{
+            "id": 85, "name": "thunderbolt",
+            "type": {"name": "electric", "url": ""},
+            "power": 90, "accuracy": 100, "pp": 15,
+            "damage_class": {"name": "special", "url": ""},
+            "priority": 0, "effect_entries": []
+        }"#;
+        let resp: MoveResponse = serde_json::from_str(json).unwrap();
+        assert!(resp.meta.is_none());
+        assert!(resp.stat_changes.is_empty());
+    }
+
+    #[test]
+    fn test_move_response_with_recoil() {
+        let json = r#"{
+            "id": 394, "name": "flare-blitz",
+            "type": {"name": "fire", "url": ""},
+            "power": 120, "accuracy": 100, "pp": 15,
+            "damage_class": {"name": "physical", "url": ""},
+            "priority": 0, "effect_entries": [],
+            "meta": {"drain": -33, "healing": 0, "crit_rate": 0, "ailment_chance": 10, "flinch_chance": 0, "stat_chance": 0},
+            "stat_changes": []
+        }"#;
+        let resp: MoveResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.meta.unwrap().drain, -33);
+        assert!(resp.stat_changes.is_empty());
     }
 }

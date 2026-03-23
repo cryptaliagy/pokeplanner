@@ -68,7 +68,16 @@ version-group/{name} → pokedexes[]
 pokedex/{name} → pokemon_entries[] (species names)
 pokemon-species/{name} → varieties[] (forms: base, mega, regional)
 pokemon/{form_name} → stats[], types[]
+move/{name} → type, power, accuracy, pp, damage_class, meta, stat_changes
 ```
+
+### Move metadata semantics
+
+The `/move/{name}` endpoint returns two fields used for move safety filtering:
+
+- **`meta.drain`** (i32): percentage of damage drained as HP. Negative = recoil (user loses HP, e.g. Flare Blitz: -33), positive = HP drain (e.g. Giga Drain: 50), 0 = neither.
+- **`meta.stat_chance`** (i32): probability that `stat_changes` apply. **0 means guaranteed** (not "never") — this is PokeAPI's convention. Values 1–99 are probabilities; ≥100 is also guaranteed. For example, Overheat has `stat_chance: 0` with `stat_changes: [{change: -2, stat: "special-attack"}]`, meaning the SpAtk drop always occurs.
+- **`stat_changes`** (array): top-level array of `{change: i32, stat: NamedApiResource}`. Only negative entries (debuffs) with guaranteed application are captured in the core `Move.self_stat_changes` field.
 
 ## Caching Strategy
 
