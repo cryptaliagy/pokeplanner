@@ -253,6 +253,7 @@ impl<'a> TeamPlanner<'a> {
                     pokemon: p.clone(),
                     weaknesses_2x: w2x,
                     weaknesses_4x: w4x,
+                    recommended_moves: None,
                 }
             })
             .collect();

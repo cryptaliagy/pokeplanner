@@ -13,9 +13,9 @@ pokeplanner/
 │   │   └── src/
 │   │       ├── lib.rs
 │   │       ├── error.rs        # AppError enum (+ PokeApi, Cache variants)
-│   │       ├── model.rs        # PokemonType, BaseStats, Pokemon, HealthResponse (+ inline tests)
+│   │       ├── model.rs        # PokemonType, BaseStats, Pokemon, Move, MoveStatChange, HealthResponse (+ inline tests)
 │   │       ├── job.rs          # Job, JobStatus, JobKind, JobProgress, JobResult (+ inline tests)
-│   │       └── team.rs         # TeamPlanRequest, TeamSource, TeamPlan, TypeCoverage, SortField (+ inline tests)
+│   │       └── team.rs         # TeamPlanRequest, TeamSource, TeamPlan, TeamMember, RecommendedMove, MoveRole, TypeCoverage, SortField (+ inline tests)
 │   ├── pokeplanner-storage/    # Storage trait + JSON file implementation
 │   │   └── src/
 │   │       ├── lib.rs

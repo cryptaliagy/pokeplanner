@@ -135,6 +135,13 @@ pub struct LearnsetEntry {
     pub version_group: String,
 }
 
+/// A stat change that a move inflicts on its user.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MoveStatChange {
+    pub stat: String,
+    pub change: i32,
+}
+
 /// Detailed move information.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Move {
@@ -146,6 +153,12 @@ pub struct Move {
     pub damage_class: String,
     pub priority: i32,
     pub effect: Option<String>,
+    /// Recoil/drain percentage: negative = recoil, positive = drain, 0 = neither.
+    #[serde(default)]
+    pub drain: i32,
+    /// Stat changes the move applies to its user (e.g. Overheat: SpAtk -2).
+    #[serde(default)]
+    pub self_stat_changes: Vec<MoveStatChange>,
 }
 
 /// A learnset entry enriched with move details.
@@ -262,5 +275,25 @@ mod tests {
             vec![PokemonType::Fire, PokemonType::Dragon]
         );
         assert!(!deserialized.is_default_form);
+    }
+
+    #[test]
+    fn test_move_stat_change_serde_roundtrip() {
+        let sc = MoveStatChange {
+            stat: "special-attack".to_string(),
+            change: -2,
+        };
+        let json = serde_json::to_string(&sc).unwrap();
+        let deserialized: MoveStatChange = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, sc);
+    }
+
+    #[test]
+    fn test_move_deserialize_without_new_fields() {
+        // JSON from before this change — no drain or self_stat_changes
+        let json = r#"{"name":"thunderbolt","move_type":"electric","power":90,"accuracy":100,"pp":15,"damage_class":"special","priority":0,"effect":"..."}"#;
+        let m: Move = serde_json::from_str(json).unwrap();
+        assert_eq!(m.drain, 0);
+        assert!(m.self_stat_changes.is_empty());
     }
 }

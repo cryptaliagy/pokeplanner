@@ -170,6 +170,8 @@ impl PokeApiClient for MockPokeApi {
             damage_class: "status".to_string(),
             priority: 0,
             effect: None,
+            drain: 0,
+            self_stat_changes: Vec::new(),
         })
     }
 }

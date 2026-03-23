@@ -31,7 +31,7 @@
 
 ## Architecture Quick Reference
 
-- **Core types**: `crates/pokeplanner-core/` — shared models (Pokemon, Move, LearnsetEntry, DetailedLearnsetEntry), errors, job types, team types
+- **Core types**: `crates/pokeplanner-core/` — shared models (Pokemon, Move, MoveStatChange, LearnsetEntry, DetailedLearnsetEntry, RecommendedMove, MoveRole), errors, job types, team types
 - **Storage**: `crates/pokeplanner-storage/` — `Storage` trait + `JsonFileStorage`
 - **PokeAPI Client**: `crates/pokeplanner-pokeapi/` — `PokeApiClient` trait + `PokeApiHttpClient` with disk cache and rate limiting
 - **Service**: `crates/pokeplanner-service/` — business logic, job orchestration, team planner, type chart

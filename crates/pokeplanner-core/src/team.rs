@@ -2,6 +2,28 @@ use serde::{Deserialize, Serialize};
 
 use crate::model::{Pokemon, PokemonType};
 
+/// The role a recommended move fills on a team member's moveset.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum MoveRole {
+    /// Same-type attack bonus move.
+    Stab,
+    /// Covers a specific weakness the pokemon has.
+    WeaknessCoverage(PokemonType),
+    /// Covers the mirror match (same type as self).
+    MirrorCoverage,
+}
+
+/// A move recommended for a team member, with its role in the moveset.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecommendedMove {
+    pub move_name: String,
+    pub move_type: PokemonType,
+    pub power: u32,
+    pub damage_class: String,
+    pub role: MoveRole,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum TeamSource {
@@ -46,6 +68,9 @@ pub struct TeamMember {
     pub pokemon: Pokemon,
     pub weaknesses_2x: Vec<PokemonType>,
     pub weaknesses_4x: Vec<PokemonType>,
+    /// Recommended moves for this team member. `None` means move analysis wasn't performed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recommended_moves: Option<Vec<RecommendedMove>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -243,5 +268,67 @@ mod tests {
     #[test]
     fn test_sort_order_default() {
         assert_eq!(SortOrder::default(), SortOrder::Asc);
+    }
+
+    #[test]
+    fn test_recommended_move_serde_roundtrip_stab() {
+        let rm = RecommendedMove {
+            move_name: "flamethrower".to_string(),
+            move_type: PokemonType::Fire,
+            power: 90,
+            damage_class: "special".to_string(),
+            role: MoveRole::Stab,
+        };
+        let json = serde_json::to_string(&rm).unwrap();
+        let deserialized: RecommendedMove = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.move_name, "flamethrower");
+        assert_eq!(deserialized.role, MoveRole::Stab);
+    }
+
+    #[test]
+    fn test_recommended_move_serde_roundtrip_weakness_coverage() {
+        let rm = RecommendedMove {
+            move_name: "earthquake".to_string(),
+            move_type: PokemonType::Ground,
+            power: 100,
+            damage_class: "physical".to_string(),
+            role: MoveRole::WeaknessCoverage(PokemonType::Electric),
+        };
+        let json = serde_json::to_string(&rm).unwrap();
+        let deserialized: RecommendedMove = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.role, MoveRole::WeaknessCoverage(PokemonType::Electric));
+    }
+
+    #[test]
+    fn test_recommended_move_serde_roundtrip_mirror_coverage() {
+        let rm = RecommendedMove {
+            move_name: "shadow-ball".to_string(),
+            move_type: PokemonType::Ghost,
+            power: 80,
+            damage_class: "special".to_string(),
+            role: MoveRole::MirrorCoverage,
+        };
+        let json = serde_json::to_string(&rm).unwrap();
+        let deserialized: RecommendedMove = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.role, MoveRole::MirrorCoverage);
+    }
+
+    #[test]
+    fn test_team_member_deserialize_without_recommended_moves() {
+        // JSON from before this change — no recommended_moves field
+        let json = r#"{
+            "pokemon": {
+                "species_name": "pikachu",
+                "form_name": "pikachu",
+                "pokedex_number": 25,
+                "types": ["electric"],
+                "stats": {"hp":35,"attack":55,"defense":40,"special_attack":50,"special_defense":50,"speed":90},
+                "is_default_form": true
+            },
+            "weaknesses_2x": ["ground"],
+            "weaknesses_4x": []
+        }"#;
+        let member: TeamMember = serde_json::from_str(json).unwrap();
+        assert!(member.recommended_moves.is_none());
     }
 }
