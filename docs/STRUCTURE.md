@@ -4,6 +4,7 @@
 pokeplanner/
 ├── Cargo.toml                  # Workspace root — defines members and shared dependencies
 ├── README.md                   # Project overview and quickstart
+├── CONTRIBUTING.md             # Contribution guide: dev setup, code style, testing, PR workflow
 ├── AGENTS.md                   # Knowledge map (primary reference for AI agents)
 ├── CLAUDE.md -> AGENTS.md      # Symlink to AGENTS.md
 ├── proto/

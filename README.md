@@ -26,6 +26,7 @@ A competitive Pokemon team planner built in Rust. Given a game (or set of games)
 | [FAQ](docs/FAQ.md) | Why three APIs? How does the planner work? And more |
 | [Runbook](ops/RUNBOOK.md) | Production incident diagnosis playbook |
 | [Dashboards](dashboards/README.md) | Grafana dashboard import and metric mapping |
+| [Contributing](CONTRIBUTING.md) | How to contribute, dev setup, testing, PR workflow |
 
 ## Quickstart
 
