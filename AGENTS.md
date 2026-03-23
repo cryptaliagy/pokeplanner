@@ -16,7 +16,6 @@
    - `docs/ARCHITECTURE.md` — system design and data flow
    - `docs/DEPENDENCIES.md` — dependency choices and rationale
    - `docs/STRUCTURE.md` — repository layout
-   - `docs/IMPLEMENTATION_CHECKLIST.md` — tracks implementation progress for crash resilience
 
 4. **Triple helix: intent documents, tests, and functionality.**
    - All three must stay in sync. When changing code, update tests and docs together

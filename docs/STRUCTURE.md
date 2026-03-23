@@ -69,7 +69,6 @@ pokeplanner/
 │   ├── COST_FUNCTION.md        # Team scoring algorithm (offensive + defensive + BST)
 │   ├── DEPENDENCIES.md         # Dependency choices and rationale
 │   ├── FAQ.md                  # Frequently asked questions
-│   ├── IMPLEMENTATION_CHECKLIST.md  # Implementation progress tracker
 │   ├── OBSERVABILITY.md        # Observability reference: metrics, tracing, logging, correlation
 │   └── STRUCTURE.md            # This file — repository layout
 ├── ops/
