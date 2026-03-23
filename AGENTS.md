@@ -37,6 +37,7 @@
    - `just build` — build release binaries
    - `just ci` — runs all of the above in sequence
    - `just fmt` — auto-fix formatting (not a check, actually rewrites files)
+   - `just install-hooks` — install a git pre-commit hook that runs `format`, `lint`, and `check` automatically
    - These commands must pass cleanly before any commit. Do not skip them.
 
 ## Architecture Quick Reference

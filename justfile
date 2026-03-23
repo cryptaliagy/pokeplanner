@@ -28,3 +28,21 @@ audit:
 # Auto-fix formatting
 fmt:
     cargo fmt --all
+
+# Install git pre-commit hook
+install-hooks:
+    @echo '#!/usr/bin/env bash' > .git/hooks/pre-commit
+    @echo 'set -euo pipefail' >> .git/hooks/pre-commit
+    @echo '' >> .git/hooks/pre-commit
+    @echo '# Run fast pre-commit checks via just' >> .git/hooks/pre-commit
+    @echo 'echo "Running pre-commit checks..."' >> .git/hooks/pre-commit
+    @echo 'just format' >> .git/hooks/pre-commit
+    @echo 'just lint' >> .git/hooks/pre-commit
+    @echo 'just check' >> .git/hooks/pre-commit
+    @chmod +x .git/hooks/pre-commit
+    @echo "Pre-commit hook installed (.git/hooks/pre-commit)"
+
+# Uninstall git pre-commit hook
+uninstall-hooks:
+    @rm -f .git/hooks/pre-commit
+    @echo "Pre-commit hook removed"
