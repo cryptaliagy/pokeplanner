@@ -36,8 +36,8 @@ jobs:
         with:
           cache-on-failure: true
 
-      - name: cargo check
-        run: nix develop --command cargo check --workspace --all-targets
+      - name: just check
+        run: nix develop --command just check
 
   audit:
     name: Security Audit
@@ -55,8 +55,8 @@ jobs:
           primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
           restore-prefixes-first-match: nix-${{ runner.os }}-
 
-      - name: cargo audit
-        run: nix develop --command cargo audit
+      - name: just audit
+        run: nix develop --command just audit
 
   fmt:
     name: Format
@@ -74,8 +74,8 @@ jobs:
           primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
           restore-prefixes-first-match: nix-${{ runner.os }}-
 
-      - name: cargo fmt
-        run: nix develop --command cargo fmt --all -- --check
+      - name: just format
+        run: nix develop --command just format
 
   clippy:
     name: Clippy
@@ -97,8 +97,8 @@ jobs:
         with:
           cache-on-failure: true
 
-      - name: cargo clippy
-        run: nix develop --command cargo clippy --workspace --all-targets -- -D warnings
+      - name: just lint
+        run: nix develop --command just lint
 
   test:
     name: Test
@@ -121,8 +121,8 @@ jobs:
         with:
           cache-on-failure: true
 
-      - name: Run tests
-        run: nix develop --command cargo test --workspace
+      - name: just test
+        run: nix develop --command just test
 
   build:
     name: Build
@@ -145,5 +145,5 @@ jobs:
         with:
           cache-on-failure: true
 
-      - name: Build release binaries
-        run: nix develop --command cargo build --workspace --release
+      - name: just build
+        run: nix develop --command just build

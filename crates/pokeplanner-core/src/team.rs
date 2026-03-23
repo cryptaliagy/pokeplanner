@@ -8,8 +8,8 @@ use crate::model::{Pokemon, PokemonType};
 pub enum MoveRole {
     /// Same-type attack bonus move.
     Stab,
-    /// Covers a specific weakness the pokemon has.
-    WeaknessCoverage(PokemonType),
+    /// Covers one or more weaknesses the pokemon has.
+    WeaknessCoverage(Vec<PokemonType>),
     /// Covers the mirror match (same type as self).
     MirrorCoverage,
 }
@@ -292,11 +292,14 @@ mod tests {
             move_type: PokemonType::Ground,
             power: 100,
             damage_class: "physical".to_string(),
-            role: MoveRole::WeaknessCoverage(PokemonType::Electric),
+            role: MoveRole::WeaknessCoverage(vec![PokemonType::Electric, PokemonType::Rock]),
         };
         let json = serde_json::to_string(&rm).unwrap();
         let deserialized: RecommendedMove = serde_json::from_str(&json).unwrap();
-        assert_eq!(deserialized.role, MoveRole::WeaknessCoverage(PokemonType::Electric));
+        assert_eq!(
+            deserialized.role,
+            MoveRole::WeaknessCoverage(vec![PokemonType::Electric, PokemonType::Rock])
+        );
     }
 
     #[test]

@@ -29,6 +29,16 @@
    - Integration tests (cross-crate, end-to-end) go in a top-level `tests/` directory per crate
    - Run all tests with `cargo test` from the workspace root
 
+6. **Always run `just ci` (or at minimum `just format lint check test`) before committing.**
+   - `just format` — check formatting (`cargo fmt --all -- --check`); CI rejects unformatted code
+   - `just lint` — run clippy (`cargo clippy --workspace --all-targets -- -D warnings`); warnings are errors
+   - `just check` — type-check the workspace
+   - `just test` — run all tests
+   - `just build` — build release binaries
+   - `just ci` — runs all of the above in sequence
+   - `just fmt` — auto-fix formatting (not a check, actually rewrites files)
+   - These commands must pass cleanly before any commit. Do not skip them.
+
 ## Architecture Quick Reference
 
 - **Core types**: `crates/pokeplanner-core/` — shared models (Pokemon, Move, MoveStatChange, LearnsetEntry, DetailedLearnsetEntry, RecommendedMove, MoveRole), errors, job types, team types

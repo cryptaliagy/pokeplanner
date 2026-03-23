@@ -28,6 +28,7 @@
             pkgs.buf           # buf CLI for proto management
             pkgs.pkg-config
             pkgs.openssl
+            pkgs.just           # command runner for justfile tasks
             pkgs.cargo-audit   # security audit for dependencies
             pkgs.cargo-binstall # install cargo binaries from pre-built sources
             pkgs.act           # run GitHub Actions locally
