@@ -1,4 +1,5 @@
 use pokeplanner_core::{MoveCoverage, Pokemon, PokemonType, TeamMember, TeamPlan, TypeCoverage};
+use tracing::{debug, info_span};
 
 use crate::type_chart::TypeChart;
 
@@ -45,18 +46,30 @@ impl<'a> TeamPlanner<'a> {
     /// Plan the best teams from a list of candidate pokemon.
     /// Automatically chooses exact brute-force for small N or beam search for large N.
     pub fn plan_teams(&self, candidates: &[Pokemon], top_k: usize) -> Vec<TeamPlan> {
+        let _span = info_span!("plan_teams", candidate_count = candidates.len(), top_k,).entered();
+
         if candidates.len() < TEAM_SIZE {
             if candidates.is_empty() {
                 return Vec::new();
             }
+            debug!(algorithm = "partial", "fewer than 6 candidates, using all");
             let team = candidates.to_vec();
             let plan = self.build_team_plan(&team);
             return vec![plan];
         }
 
         if candidates.len() <= EXACT_THRESHOLD {
+            debug!(
+                algorithm = "exact",
+                "using brute-force (N <= {EXACT_THRESHOLD})"
+            );
             self.plan_exact(candidates, top_k)
         } else {
+            debug!(
+                algorithm = "beam",
+                beam_width = BEAM_WIDTH,
+                "using beam search (N > {EXACT_THRESHOLD})"
+            );
             self.plan_beam(candidates, top_k)
         }
     }

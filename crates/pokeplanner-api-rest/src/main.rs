@@ -5,7 +5,7 @@ use clap::Parser;
 use pokeplanner_pokeapi::PokeApiHttpClient;
 use pokeplanner_service::PokePlannerService;
 use pokeplanner_storage::JsonFileStorage;
-use tracing_subscriber::EnvFilter;
+use pokeplanner_telemetry::{LogFormat, ServerTelemetryConfig};
 
 use pokeplanner_api_rest::create_router;
 
@@ -37,15 +37,29 @@ struct Cli {
     /// Directory for job storage data
     #[arg(long, default_value_os_t = default_data_dir().join("jobs"))]
     data_dir: PathBuf,
+
+    /// OTLP exporter endpoint (e.g., http://localhost:4317). OTEL disabled when absent.
+    #[arg(long, env = "OTEL_EXPORTER_OTLP_ENDPOINT")]
+    otlp_endpoint: Option<String>,
+
+    /// Log output format
+    #[arg(long, default_value = "text")]
+    log_format: LogFormat,
+
+    /// Base log level filter
+    #[arg(long, default_value = "info")]
+    log_level: String,
 }
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .init();
-
     let cli = Cli::parse();
+
+    let _guard = pokeplanner_telemetry::init_server_telemetry(ServerTelemetryConfig {
+        otlp_endpoint: cli.otlp_endpoint,
+        log_format: cli.log_format,
+        log_level: cli.log_level,
+    });
 
     let storage = Arc::new(
         JsonFileStorage::new(cli.data_dir)
@@ -66,5 +80,16 @@ async fn main() {
         .await
         .expect("Failed to bind");
     tracing::info!("REST API listening on {addr}");
-    axum::serve(listener, app).await.expect("Server error");
+
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await
+        .expect("Server error");
+}
+
+async fn shutdown_signal() {
+    tokio::signal::ctrl_c()
+        .await
+        .expect("Failed to listen for ctrl+c");
+    tracing::info!("Shutdown signal received");
 }

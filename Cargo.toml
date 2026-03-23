@@ -8,6 +8,7 @@ members = [
     "crates/pokeplanner-api-grpc",
     "crates/pokeplanner-cli",
     "crates/pokeplanner-pokeapi",
+    "crates/pokeplanner-telemetry",
 ]
 
 [workspace.package]
@@ -20,6 +21,7 @@ pokeplanner-core = { path = "crates/pokeplanner-core" }
 pokeplanner-storage = { path = "crates/pokeplanner-storage" }
 pokeplanner-service = { path = "crates/pokeplanner-service" }
 pokeplanner-pokeapi = { path = "crates/pokeplanner-pokeapi" }
+pokeplanner-telemetry = { path = "crates/pokeplanner-telemetry" }
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
@@ -49,14 +51,19 @@ tonic-build = "0.14"
 tonic-prost-build = "0.14"
 
 # CLI
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4", features = ["derive", "env"] }
 
-# Logging
+# Logging & Telemetry
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+opentelemetry = "0.31"
+opentelemetry_sdk = { version = "0.31", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.31", features = ["grpc-tonic"] }
+tracing-opentelemetry = "0.32"
 
 # HTTP middleware
 tower = "0.5"
+tower-http = { version = "0.6", features = ["trace"] }
 
 # HTTP client
 reqwest = { version = "0.13", features = ["json"] }

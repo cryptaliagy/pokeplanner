@@ -12,11 +12,11 @@ pokeplanner-core = { workspace = true }
 pokeplanner-storage = { workspace = true }
 pokeplanner-service = { workspace = true }
 pokeplanner-pokeapi = { workspace = true }
+pokeplanner-telemetry = { workspace = true }
 clap = { workspace = true }
 tokio = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
 dirs = { workspace = true }
 colored = { workspace = true }

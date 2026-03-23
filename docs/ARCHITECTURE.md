@@ -139,12 +139,52 @@ PokeAPI is a free, no-auth public API. We are responsible consumers:
 
 These are one-time costs. Subsequent calls are instant from cache.
 
+## Observability
+
+PokePlanner uses a three-pillar observability approach: structured logging, distributed tracing, and metrics — all built on the `tracing` + OpenTelemetry ecosystem.
+
+### Telemetry initialization (`pokeplanner-telemetry`)
+
+A shared crate centralizes subscriber setup across all three binaries:
+
+- **Servers** (REST, gRPC): `init_server_telemetry(config)` builds a layered subscriber — `EnvFilter` + `fmt` (text or JSON) + optional OTEL trace layer. Returns a `TelemetryGuard` for graceful shutdown. OTEL export is gated behind `--otlp-endpoint` (or `OTEL_EXPORTER_OTLP_ENDPOINT` env var) — zero overhead when absent.
+- **CLI**: `init_cli_telemetry(verbosity)` builds a simple fmt subscriber. `-v` enables info, `-vv` enables debug. No OTEL (CLI is short-lived).
+
+### Configuration (REST/gRPC servers)
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--otlp-endpoint <url>` | (disabled) | OTLP gRPC endpoint for trace export |
+| `--log-format text\|json` | `text` | Stdout log format |
+| `--log-level <filter>` | `info` | Base log level (overridden by `RUST_LOG`) |
+
+### Instrumentation points
+
+- **HTTP/gRPC requests**: `tower-http::TraceLayer` provides automatic per-request spans with method, path/RPC, status, and latency
+- **Job orchestration**: Team plan jobs run in an `info_span!("team_plan_job", %job_id)` with child spans per phase
+- **Team planner**: `plan_teams` logs algorithm selection (exact/beam), candidate count, top_k
+- **Move selector**: `select_moves` logs filtering decisions at debug level (rejection reasons: non-damaging, wrong class, recoil, self-debuff)
+- **PokeAPI client**: `fetch()` logs cache hit/miss, URL, and elapsed time at debug level
+
+### Metrics (`Metrics` struct)
+
+When OTEL is enabled, an optional `Metrics` struct is injected into `PokePlannerService`. Instruments include:
+
+- HTTP request counter and duration histogram
+- PokeAPI request counter, duration, cache hit/miss counters
+- Job submitted/completed/failed counters and duration histogram
+- Team planner candidate pool size and plans generated counter
+
+All metrics are no-ops when OTEL is not configured.
+
 ## Crate Dependency Graph
 
 ```
 pokeplanner-api-rest ──┐
 pokeplanner-api-grpc ──┼──► pokeplanner-service ──┬──► pokeplanner-storage ──► pokeplanner-core
-pokeplanner-cli ───────┘                          └──► pokeplanner-pokeapi ──► pokeplanner-core
+pokeplanner-cli ───────┘          │               └──► pokeplanner-pokeapi ──► pokeplanner-core
+                                  │
+                    pokeplanner-telemetry (shared by all binaries + service)
 ```
 
 All crates depend on `pokeplanner-core` for shared types.

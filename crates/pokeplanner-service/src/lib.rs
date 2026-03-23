@@ -12,7 +12,8 @@ use pokeplanner_core::{
 };
 use pokeplanner_pokeapi::{PokeApiClient, VersionGroupInfo};
 use pokeplanner_storage::Storage;
-use tracing::{info, warn};
+use pokeplanner_telemetry::Metrics;
+use tracing::{debug, info, info_span, warn, Instrument};
 
 use crate::move_selector::MoveSelector;
 use crate::team_planner::TeamPlanner;
@@ -21,11 +22,21 @@ use crate::type_chart::TypeChart;
 pub struct PokePlannerService<S: Storage, P: PokeApiClient> {
     storage: Arc<S>,
     pokeapi: Arc<P>,
+    metrics: Option<Metrics>,
 }
 
 impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
     pub fn new(storage: Arc<S>, pokeapi: Arc<P>) -> Self {
-        Self { storage, pokeapi }
+        Self {
+            storage,
+            pokeapi,
+            metrics: None,
+        }
+    }
+
+    pub fn with_metrics(mut self, metrics: Metrics) -> Self {
+        self.metrics = Some(metrics);
+        self
     }
 
     pub fn health(&self) -> HealthResponse {
@@ -214,11 +225,20 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
         let job_id = job.id;
         self.storage.save_job(&job).await?;
 
+        if let Some(ref m) = self.metrics {
+            m.job_submitted_counter.add(1, &[]);
+        }
+
         let storage = Arc::clone(&self.storage);
         let pokeapi = Arc::clone(&self.pokeapi);
-        tokio::spawn(async move {
-            Self::run_team_plan_job(storage, pokeapi, job_id, request).await;
-        });
+        let metrics = self.metrics.clone();
+        let span = info_span!("team_plan_job", %job_id);
+        tokio::spawn(
+            async move {
+                Self::run_team_plan_job(storage, pokeapi, metrics, job_id, request).await;
+            }
+            .instrument(span),
+        );
 
         info!(job_id = %job_id, "team plan job submitted");
         Ok(job_id)
@@ -227,9 +247,11 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
     async fn run_team_plan_job(
         storage: Arc<S>,
         pokeapi: Arc<P>,
+        metrics: Option<Metrics>,
         job_id: JobId,
         request: TeamPlanRequest,
     ) {
+        let job_start = std::time::Instant::now();
         // Mark as running
         let mut job = match storage.get_job(&job_id).await {
             Ok(j) => j,
@@ -294,6 +316,8 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
                             Self::fail_job(
                                 &storage,
                                 &mut job,
+                                &metrics,
+                                job_start,
                                 &format!("Failed to fetch game pokemon for {vg}: {e}"),
                             )
                             .await;
@@ -313,6 +337,8 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
                         Self::fail_job(
                             &storage,
                             &mut job,
+                            &metrics,
+                            job_start,
                             &format!("Failed to fetch pokedex pokemon: {e}"),
                         )
                         .await;
@@ -373,11 +399,22 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
             Self::fail_job(
                 &storage,
                 &mut job,
+                &metrics,
+                job_start,
                 "No candidates remaining after filtering",
             )
             .await;
             return;
         }
+
+        if let Some(ref m) = metrics {
+            m.team_candidate_pool_size
+                .record(filtered.len() as u64, &[]);
+        }
+        debug!(
+            candidate_count = filtered.len(),
+            "candidates after filtering"
+        );
 
         // Step 3: Fetch type chart and run planner
         job.progress = Some(JobProgress {
@@ -505,6 +542,13 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
         }
 
         // Complete
+        if let Some(ref m) = metrics {
+            m.team_plans_generated.add(plans.len() as u64, &[]);
+            m.job_completed_counter.add(1, &[]);
+            m.job_duration
+                .record(job_start.elapsed().as_secs_f64(), &[]);
+        }
+
         job.status = JobStatus::Completed;
         job.updated_at = Utc::now();
         job.progress = Some(JobProgress {
@@ -521,7 +565,7 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
             data: serde_json::to_value(&plans).ok(),
         });
         let _ = storage.update_job(&job).await;
-        info!(job_id = %job_id, "team plan job completed");
+        info!(job_id = %job_id, plans = plans.len(), candidates = filtered.len(), "team plan job completed");
     }
 
     /// Synchronous team type coverage analysis.
@@ -696,7 +740,18 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
         Ok(())
     }
 
-    async fn fail_job(storage: &Arc<S>, job: &mut Job, message: &str) {
+    async fn fail_job(
+        storage: &Arc<S>,
+        job: &mut Job,
+        metrics: &Option<Metrics>,
+        job_start: std::time::Instant,
+        message: &str,
+    ) {
+        if let Some(m) = metrics {
+            m.job_failed_counter.add(1, &[]);
+            m.job_duration
+                .record(job_start.elapsed().as_secs_f64(), &[]);
+        }
         job.status = JobStatus::Failed;
         job.updated_at = Utc::now();
         job.result = Some(JobResult {
