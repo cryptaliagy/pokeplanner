@@ -46,3 +46,14 @@ install-hooks:
 uninstall-hooks:
     @rm -f .git/hooks/pre-commit
     @echo "Pre-commit hook removed"
+
+# Build Docker image for the REST API
+docker-rest:
+    docker build --target rest -t pokeplanner-rest .
+
+# Build Docker image for the gRPC API
+docker-grpc:
+    docker build --target grpc -t pokeplanner-grpc .
+
+# Build Docker images for both API services
+docker-build: docker-rest docker-grpc
