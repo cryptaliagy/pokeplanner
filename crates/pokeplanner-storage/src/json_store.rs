@@ -14,7 +14,10 @@ impl JsonFileStorage {
     pub async fn new(base_path: PathBuf) -> Result<Self, AppError> {
         tokio::fs::create_dir_all(&base_path)
             .await
-            .map_err(|e| AppError::Storage(format!("Failed to create storage dir: {e}")))?;
+            .map_err(|e| AppError::Io {
+                context: "creating storage dir".into(),
+                source: e,
+            })?;
         Ok(Self {
             base_path,
             lock: RwLock::new(()),
@@ -30,11 +33,16 @@ impl Storage for JsonFileStorage {
     async fn save_job(&self, job: &Job) -> Result<(), AppError> {
         let _guard = self.lock.write().await;
         let path = self.job_path(&job.id);
-        let data = serde_json::to_string_pretty(job)
-            .map_err(|e| AppError::Storage(format!("Serialization error: {e}")))?;
+        let data = serde_json::to_string_pretty(job).map_err(|e| AppError::Serialization {
+            context: "serializing job".into(),
+            source: e,
+        })?;
         tokio::fs::write(&path, data)
             .await
-            .map_err(|e| AppError::Storage(format!("Write error: {e}")))?;
+            .map_err(|e| AppError::Io {
+                context: "writing job file".into(),
+                source: e,
+            })?;
         Ok(())
     }
 
@@ -44,8 +52,10 @@ impl Storage for JsonFileStorage {
         let data = tokio::fs::read_to_string(&path)
             .await
             .map_err(|_| AppError::JobNotFound(*id))?;
-        let job: Job = serde_json::from_str(&data)
-            .map_err(|e| AppError::Storage(format!("Deserialization error: {e}")))?;
+        let job: Job = serde_json::from_str(&data).map_err(|e| AppError::Serialization {
+            context: "deserializing job".into(),
+            source: e,
+        })?;
         Ok(job)
     }
 
@@ -54,17 +64,22 @@ impl Storage for JsonFileStorage {
         let mut jobs = Vec::new();
         let mut entries = tokio::fs::read_dir(&self.base_path)
             .await
-            .map_err(|e| AppError::Storage(format!("Read dir error: {e}")))?;
-        while let Some(entry) = entries
-            .next_entry()
-            .await
-            .map_err(|e| AppError::Storage(format!("Dir entry error: {e}")))?
-        {
+            .map_err(|e| AppError::Io {
+                context: "reading storage dir".into(),
+                source: e,
+            })?;
+        while let Some(entry) = entries.next_entry().await.map_err(|e| AppError::Io {
+            context: "reading dir entry".into(),
+            source: e,
+        })? {
             let path = entry.path();
             if path.extension().is_some_and(|ext| ext == "json") {
                 let data = tokio::fs::read_to_string(&path)
                     .await
-                    .map_err(|e| AppError::Storage(format!("Read error: {e}")))?;
+                    .map_err(|e| AppError::Io {
+                        context: "reading job file".into(),
+                        source: e,
+                    })?;
                 if let Ok(job) = serde_json::from_str::<Job>(&data) {
                     jobs.push(job);
                 }
@@ -79,11 +94,16 @@ impl Storage for JsonFileStorage {
         if !path.exists() {
             return Err(AppError::JobNotFound(job.id));
         }
-        let data = serde_json::to_string_pretty(job)
-            .map_err(|e| AppError::Storage(format!("Serialization error: {e}")))?;
+        let data = serde_json::to_string_pretty(job).map_err(|e| AppError::Serialization {
+            context: "serializing job".into(),
+            source: e,
+        })?;
         tokio::fs::write(&path, data)
             .await
-            .map_err(|e| AppError::Storage(format!("Write error: {e}")))?;
+            .map_err(|e| AppError::Io {
+                context: "writing job file".into(),
+                source: e,
+            })?;
         Ok(())
     }
 }

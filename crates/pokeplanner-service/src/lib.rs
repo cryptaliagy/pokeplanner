@@ -80,7 +80,9 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
         if let Ok(mut job) = storage.get_job(&job_id).await {
             job.status = JobStatus::Running;
             job.updated_at = Utc::now();
-            let _ = storage.update_job(&job).await;
+            if let Err(e) = storage.update_job(&job).await {
+                warn!(job_id = %job.id, "Failed to persist job update: {e}");
+            }
 
             tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
@@ -90,7 +92,9 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
                 message: "Job completed successfully".to_string(),
                 data: None,
             });
-            let _ = storage.update_job(&job).await;
+            if let Err(e) = storage.update_job(&job).await {
+                warn!(job_id = %job.id, "Failed to persist job update: {e}");
+            }
             info!(job_id = %job_id, "job completed");
         }
     }
@@ -293,7 +297,9 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
             completed_steps: 0,
             total_steps,
         });
-        let _ = storage.update_job(&job).await;
+        if let Err(e) = storage.update_job(&job).await {
+            warn!(job_id = %job.id, "Failed to persist job update: {e}");
+        }
 
         // Step 1: Fetch candidate pokemon
         let candidates = match &request.source {
@@ -365,7 +371,9 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
             total_steps,
         });
         job.updated_at = Utc::now();
-        let _ = storage.update_job(&job).await;
+        if let Err(e) = storage.update_job(&job).await {
+            warn!(job_id = %job.id, "Failed to persist job update: {e}");
+        }
 
         // Step 2: Apply filters
         let mut filtered = candidates;
@@ -423,7 +431,9 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
             total_steps,
         });
         job.updated_at = Utc::now();
-        let _ = storage.update_job(&job).await;
+        if let Err(e) = storage.update_job(&job).await {
+            warn!(job_id = %job.id, "Failed to persist job update: {e}");
+        }
 
         let type_chart = match pokeapi.get_type_chart(request.no_cache).await {
             Ok(data) => TypeChart::from_api_data(&data),
@@ -462,7 +472,9 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
                 total_steps,
             });
             job.updated_at = Utc::now();
-            let _ = storage.update_job(&job).await;
+            if let Err(e) = storage.update_job(&job).await {
+                warn!(job_id = %job.id, "Failed to persist job update: {e}");
+            }
 
             // Fetch all version groups for generation-aware fallback
             let all_vgs = match pokeapi.get_version_groups(request.no_cache).await {
@@ -565,7 +577,9 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
             ),
             data: serde_json::to_value(&plans).ok(),
         });
-        let _ = storage.update_job(&job).await;
+        if let Err(e) = storage.update_job(&job).await {
+            warn!(job_id = %job.id, "Failed to persist job update: {e}");
+        }
         info!(job_id = %job_id, plans = plans.len(), candidates = filtered.len(), "team plan job completed");
     }
 
@@ -763,7 +777,9 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
             message: message.to_string(),
             data: None,
         });
-        let _ = storage.update_job(job).await;
+        if let Err(e) = storage.update_job(job).await {
+            warn!(job_id = %job.id, "Failed to persist job update: {e}");
+        }
         warn!(job_id = %job.id, "job failed: {message}");
     }
 }

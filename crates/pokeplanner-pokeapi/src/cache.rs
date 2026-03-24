@@ -36,7 +36,10 @@ impl DiskCache {
     pub async fn new(base_path: PathBuf) -> Result<Self, AppError> {
         tokio::fs::create_dir_all(&base_path)
             .await
-            .map_err(|e| AppError::Cache(format!("Failed to create cache directory: {e}")))?;
+            .map_err(|e| AppError::Io {
+                context: "creating cache directory".into(),
+                source: e,
+            })?;
         Ok(Self { base_path })
     }
 
@@ -90,7 +93,10 @@ impl DiskCache {
         if let Some(parent) = path.parent() {
             tokio::fs::create_dir_all(parent)
                 .await
-                .map_err(|e| AppError::Cache(format!("Failed to create cache dir: {e}")))?;
+                .map_err(|e| AppError::Io {
+                    context: "creating cache dir".into(),
+                    source: e,
+                })?;
         }
 
         let entry = CacheEntry {
@@ -98,12 +104,17 @@ impl DiskCache {
             data,
         };
 
-        let json = serde_json::to_vec(&entry)
-            .map_err(|e| AppError::Cache(format!("Failed to serialize cache entry: {e}")))?;
+        let json = serde_json::to_vec(&entry).map_err(|e| AppError::Serialization {
+            context: "serializing cache entry".into(),
+            source: e,
+        })?;
 
         tokio::fs::write(&path, json)
             .await
-            .map_err(|e| AppError::Cache(format!("Failed to write cache file: {e}")))?;
+            .map_err(|e| AppError::Io {
+                context: "writing cache file".into(),
+                source: e,
+            })?;
 
         debug!("Cache set for {category}/{key}");
         Ok(())
@@ -120,9 +131,10 @@ impl DiskCache {
         match tokio::fs::remove_file(&path).await {
             Ok(()) => Ok(true),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
-            Err(e) => Err(AppError::Cache(format!(
-                "Failed to remove {category}/{key}: {e}"
-            ))),
+            Err(e) => Err(AppError::Io {
+                context: format!("removing cache entry {category}/{key}"),
+                source: e,
+            }),
         }
     }
 
@@ -133,14 +145,14 @@ impl DiskCache {
             return Ok(0);
         }
         let mut count = 0u64;
-        let mut entries = tokio::fs::read_dir(&dir)
-            .await
-            .map_err(|e| AppError::Cache(format!("Failed to read {category}/: {e}")))?;
-        while let Some(entry) = entries
-            .next_entry()
-            .await
-            .map_err(|e| AppError::Cache(format!("Failed reading dir entry: {e}")))?
-        {
+        let mut entries = tokio::fs::read_dir(&dir).await.map_err(|e| AppError::Io {
+            context: format!("reading cache dir {category}/"),
+            source: e,
+        })?;
+        while let Some(entry) = entries.next_entry().await.map_err(|e| AppError::Io {
+            context: "reading cache dir entry".into(),
+            source: e,
+        })? {
             if entry.path().is_file() {
                 let _ = tokio::fs::remove_file(entry.path()).await;
                 count += 1;

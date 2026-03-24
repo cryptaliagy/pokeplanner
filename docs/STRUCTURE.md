@@ -13,7 +13,7 @@ pokeplanner/
 │   ├── pokeplanner-core/       # Shared types: models, errors, job types, team types
 │   │   └── src/
 │   │       ├── lib.rs
-│   │       ├── error.rs        # AppError enum (+ PokeApi, Cache variants)
+│   │       ├── error.rs        # AppError enum (Io, Serialization, PokeApi variants)
 │   │       ├── model.rs        # PokemonType, BaseStats, Pokemon, Move, MoveStatChange, HealthResponse (+ inline tests)
 │   │       ├── job.rs          # Job, JobStatus, JobKind, JobProgress, JobResult (+ inline tests)
 │   │       └── team.rs         # TeamPlanRequest, TeamSource, TeamPlan, TeamMember, RecommendedMove, MoveRole, TypeCoverage, SortField (+ inline tests)
