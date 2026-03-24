@@ -49,7 +49,17 @@ pokeplanner/
 │   │       └── build.rs        # Proto compilation
 │   ├── pokeplanner-cli/        # CLI application
 │   │   └── src/
-│   │       └── main.rs         # Clap-based CLI with team planning commands
+│   │       ├── main.rs         # Clap structs, arg parsing, and dispatch
+│   │       ├── display.rs      # Display/formatting helpers (stat bars, type colors, tables)
+│   │       ├── unusable.rs     # UnusableStore (persistent unusable pokemon list)
+│   │       └── commands/
+│   │           ├── mod.rs
+│   │           ├── pokemon.rs  # pokemon show/search subcommands
+│   │           ├── team.rs     # plan-team, analyze-team
+│   │           ├── cache.rs    # cache stats/populate/clear
+│   │           ├── moves.rs    # moves show/search
+│   │           ├── games.rs    # list-games, game-pokemon, pokedex-pokemon
+│   │           └── unusable_cmd.rs  # unusable add/remove/list/clear
 │   └── pokeplanner-telemetry/  # Shared observability initialization
 │       └── src/
 │           ├── lib.rs          # Subscriber init (server + CLI), TelemetryGuard, OTEL setup
