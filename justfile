@@ -46,3 +46,14 @@ install-hooks:
 uninstall-hooks:
     @rm -f .git/hooks/pre-commit
     @echo "Pre-commit hook removed"
+
+# Build a Docker image for a service (rest or grpc), or both if omitted
+docker service="all":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ "{{ service }}" = "all" ]; then
+        just docker rest
+        just docker grpc
+    else
+        docker build --target "{{ service }}" -t "pokeplanner-{{ service }}" .
+    fi

@@ -1,0 +1,32 @@
+# Version-control metadata
+.git
+
+# Rust build artefacts – rebuilt inside Docker
+target
+
+# Nix / direnv development environment
+.direnv
+flake.nix
+flake.lock
+.envrc
+
+# Frontend assets (not used by the API services)
+frontend
+
+# Dashboards and operations runbooks
+dashboards
+ops
+
+# Development tooling and documentation
+tools
+docs
+
+# Markdown documentation files
+AGENTS.md
+CLAUDE.md
+CONTRIBUTING.md
+INSTALL.md
+README.md
+
+# GitHub Actions configuration
+.github
