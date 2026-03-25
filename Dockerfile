@@ -37,7 +37,9 @@ FROM gcr.io/distroless/cc-debian12 AS rest
 COPY --from=builder /app/target/release/pokeplanner-rest /pokeplanner-rest
 
 EXPOSE 3000
-ENTRYPOINT ["/pokeplanner-rest"]
+VOLUME ["/data"]
+ENV POKEPLANNER_DATA_DIR=/data
+ENTRYPOINT ["/pokeplanner-rest", "--cache-dir", "/data/cache", "--data-dir", "/data/jobs"]
 
 # ─── Stage 5: gRPC API production image ───────────────────────────────────────
 FROM gcr.io/distroless/cc-debian12 AS grpc
@@ -45,4 +47,6 @@ FROM gcr.io/distroless/cc-debian12 AS grpc
 COPY --from=builder /app/target/release/pokeplanner-grpc /pokeplanner-grpc
 
 EXPOSE 50051
-ENTRYPOINT ["/pokeplanner-grpc"]
+VOLUME ["/data"]
+ENV POKEPLANNER_DATA_DIR=/data
+ENTRYPOINT ["/pokeplanner-grpc", "--cache-dir", "/data/cache", "--data-dir", "/data/jobs"]
