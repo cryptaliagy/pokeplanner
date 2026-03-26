@@ -47,7 +47,7 @@ PokePlanner is a Rust workspace organized into a layered architecture with clear
 The job system supports long-running operations:
 1. Client submits a job via `POST /jobs` (REST) or `SubmitJob`/`PlanTeam` (gRPC) or CLI
 2. Service creates a `Pending` job with a `JobKind` (Generic or TeamPlan), persists it, and returns the job ID immediately
-3. A background task picks up the job, transitions it through `Running` -> `Completed`/`Failed`
+3. A background task picks up the job, transitions it through `Running` -> `Completed`/`Failed`. The outer function (`run_team_plan_job`) handles all state transitions via a single `match` on the inner function's `Result`, guaranteeing a terminal state on every exit path. The inner function (`execute_team_plan`) uses `?` for error propagation — adding new fallible steps doesn't require manual `fail_job` calls.
 4. Job `progress` field is updated during long operations (e.g., "Fetching pokemon 47/312")
 5. Client polls for status via `GET /jobs/{id}` or `GetJob` or CLI `get-job`
 

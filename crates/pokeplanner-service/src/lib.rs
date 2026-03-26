@@ -77,22 +77,47 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
     }
 
     async fn run_generic_job(storage: Arc<S>, job_id: JobId) {
-        if let Ok(mut job) = storage.get_job(&job_id).await {
-            job.status = JobStatus::Running;
-            job.updated_at = Utc::now();
-            let _ = storage.update_job(&job).await;
+        let mut job = match storage.get_job(&job_id).await {
+            Ok(j) => j,
+            Err(e) => {
+                warn!("Failed to get job {job_id}: {e}");
+                return;
+            }
+        };
 
-            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        job.status = JobStatus::Running;
+        job.updated_at = Utc::now();
+        let _ = storage.update_job(&job).await;
 
-            job.status = JobStatus::Completed;
-            job.updated_at = Utc::now();
-            job.result = Some(JobResult {
-                message: "Job completed successfully".to_string(),
-                data: None,
-            });
-            let _ = storage.update_job(&job).await;
-            info!(job_id = %job_id, "job completed");
+        match Self::execute_generic_job().await {
+            Ok(result) => {
+                job.status = JobStatus::Completed;
+                job.updated_at = Utc::now();
+                job.result = Some(result);
+                info!(job_id = %job_id, "job completed");
+            }
+            Err(e) => {
+                job.status = JobStatus::Failed;
+                job.updated_at = Utc::now();
+                job.result = Some(JobResult {
+                    message: e.to_string(),
+                    data: None,
+                });
+                warn!(job_id = %job_id, "job failed: {e}");
+            }
         }
+
+        if let Err(e) = storage.update_job(&job).await {
+            warn!(job_id = %job_id, "Failed to persist final job state: {e}");
+        }
+    }
+
+    async fn execute_generic_job() -> Result<JobResult, AppError> {
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        Ok(JobResult {
+            message: "Job completed successfully".to_string(),
+            data: None,
+        })
     }
 
     // --- PokeAPI features ---
@@ -260,15 +285,76 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
                 return;
             }
         };
+
+        job.status = JobStatus::Running;
+        job.updated_at = Utc::now();
+        let _ = storage.update_job(&job).await;
+
+        match Self::execute_team_plan(&storage, &pokeapi, &metrics, &mut job, &request).await {
+            Ok((plans, candidate_count)) => {
+                if let Some(ref m) = metrics {
+                    m.team_plans_generated.add(plans.len() as u64, &[]);
+                    m.job_completed_counter.add(1, &[]);
+                    m.job_duration
+                        .record(job_start.elapsed().as_secs_f64(), &[]);
+                }
+
+                job.status = JobStatus::Completed;
+                job.updated_at = Utc::now();
+                let total_steps = job.progress.as_ref().map(|p| p.total_steps).unwrap_or(3);
+                job.progress = Some(JobProgress {
+                    phase: "Complete".to_string(),
+                    completed_steps: total_steps,
+                    total_steps,
+                });
+                job.result = Some(JobResult {
+                    message: format!(
+                        "Generated {} team plan(s) from {} candidates",
+                        plans.len(),
+                        candidate_count
+                    ),
+                    data: serde_json::to_value(&plans).ok(),
+                });
+                info!(job_id = %job_id, plans = plans.len(), candidates = candidate_count, "team plan job completed");
+            }
+            Err(e) => {
+                if let Some(ref m) = metrics {
+                    m.job_failed_counter.add(1, &[]);
+                    m.job_duration
+                        .record(job_start.elapsed().as_secs_f64(), &[]);
+                }
+
+                job.status = JobStatus::Failed;
+                job.updated_at = Utc::now();
+                job.result = Some(JobResult {
+                    message: e.to_string(),
+                    data: None,
+                });
+                warn!(job_id = %job_id, "job failed: {e}");
+            }
+        }
+
+        if let Err(e) = storage.update_job(&job).await {
+            warn!(job_id = %job_id, "Failed to persist final job state: {e}");
+        }
+    }
+
+    /// Execute the team planning pipeline. Returns the plans and candidate count on success.
+    /// All fallible steps use `?` — the caller handles state transitions.
+    async fn execute_team_plan(
+        storage: &Arc<S>,
+        pokeapi: &Arc<P>,
+        metrics: &Option<Metrics>,
+        job: &mut Job,
+        request: &TeamPlanRequest,
+    ) -> Result<(Vec<pokeplanner_core::TeamPlan>, usize), AppError> {
         // Resolve candidate version groups for learnset-based move selection.
-        // We try each in order until finding one with learnset data for a given pokemon.
         let learnset_vgs: Vec<String> = if let Some(vg) = &request.learnset_version_group {
             vec![vg.clone()]
         } else {
             match &request.source {
                 TeamSource::Game { version_groups } => version_groups.clone(),
                 TeamSource::Pokedex { pokedex_name } => {
-                    // Find version groups that contain this pokedex
                     match pokeapi.get_version_groups(request.no_cache).await {
                         Ok(groups) => groups
                             .into_iter()
@@ -286,14 +372,13 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
         };
         let total_steps = if learnset_vgs.is_empty() { 3 } else { 4 };
 
-        job.status = JobStatus::Running;
-        job.updated_at = Utc::now();
         job.progress = Some(JobProgress {
             phase: "Fetching pokemon data".to_string(),
             completed_steps: 0,
             total_steps,
         });
-        let _ = storage.update_job(&job).await;
+        job.updated_at = Utc::now();
+        let _ = storage.update_job(job).await;
 
         // Step 1: Fetch candidate pokemon
         let candidates = match &request.source {
@@ -301,51 +386,26 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
                 let mut all_pokemon = Vec::new();
                 let mut seen = std::collections::HashSet::new();
                 for vg in version_groups {
-                    match pokeapi
+                    let pokemon = pokeapi
                         .get_game_pokemon(vg, request.no_cache, request.include_variants)
                         .await
-                    {
-                        Ok(pokemon) => {
-                            for p in pokemon {
-                                if seen.insert(p.form_name.clone()) {
-                                    all_pokemon.push(p);
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            Self::fail_job(
-                                &storage,
-                                &mut job,
-                                &metrics,
-                                job_start,
-                                &format!("Failed to fetch game pokemon for {vg}: {e}"),
-                            )
-                            .await;
-                            return;
+                        .map_err(|e| {
+                            AppError::Internal(format!(
+                                "Failed to fetch game pokemon for {vg}: {e}"
+                            ))
+                        })?;
+                    for p in pokemon {
+                        if seen.insert(p.form_name.clone()) {
+                            all_pokemon.push(p);
                         }
                     }
                 }
                 all_pokemon
             }
-            TeamSource::Pokedex { pokedex_name } => {
-                match pokeapi
-                    .get_pokedex_pokemon(pokedex_name, request.no_cache, request.include_variants)
-                    .await
-                {
-                    Ok(pokemon) => pokemon,
-                    Err(e) => {
-                        Self::fail_job(
-                            &storage,
-                            &mut job,
-                            &metrics,
-                            job_start,
-                            &format!("Failed to fetch pokedex pokemon: {e}"),
-                        )
-                        .await;
-                        return;
-                    }
-                }
-            }
+            TeamSource::Pokedex { pokedex_name } => pokeapi
+                .get_pokedex_pokemon(pokedex_name, request.no_cache, request.include_variants)
+                .await
+                .map_err(|e| AppError::Internal(format!("Failed to fetch pokedex pokemon: {e}")))?,
             TeamSource::Custom { pokemon_names } => {
                 let mut pokemon_list = Vec::new();
                 for name in pokemon_names {
@@ -365,7 +425,7 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
             total_steps,
         });
         job.updated_at = Utc::now();
-        let _ = storage.update_job(&job).await;
+        let _ = storage.update_job(job).await;
 
         // Step 2: Apply filters
         let mut filtered = candidates;
@@ -396,15 +456,9 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
         }
 
         if filtered.is_empty() {
-            Self::fail_job(
-                &storage,
-                &mut job,
-                &metrics,
-                job_start,
-                "No candidates remaining after filtering",
-            )
-            .await;
-            return;
+            return Err(AppError::Internal(
+                "No candidates remaining after filtering".to_string(),
+            ));
         }
 
         if let Some(ref m) = metrics {
@@ -423,7 +477,7 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
             total_steps,
         });
         job.updated_at = Utc::now();
-        let _ = storage.update_job(&job).await;
+        let _ = storage.update_job(job).await;
 
         let type_chart = match pokeapi.get_type_chart(request.no_cache).await {
             Ok(data) => TypeChart::from_api_data(&data),
@@ -453,6 +507,7 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
             planner = planner.with_counter_team(enemies);
         }
         let mut plans = planner.plan_teams(&filtered, top_k);
+        let candidate_count = filtered.len();
 
         // Step 4 (optional): Select recommended moves for each team member
         if !learnset_vgs.is_empty() {
@@ -462,7 +517,7 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
                 total_steps,
             });
             job.updated_at = Utc::now();
-            let _ = storage.update_job(&job).await;
+            let _ = storage.update_job(job).await;
 
             // Fetch all version groups for generation-aware fallback
             let all_vgs = match pokeapi.get_version_groups(request.no_cache).await {
@@ -478,13 +533,13 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
             for plan in &mut plans {
                 for member in &mut plan.team {
                     match Self::fetch_learnset_and_select(
-                        &pokeapi,
+                        pokeapi,
                         &selector,
                         member,
                         &learnset_vgs,
                         &all_vgs,
                         request.no_cache,
-                        &metrics,
+                        metrics,
                     )
                     .await
                     {
@@ -542,31 +597,7 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
             }
         }
 
-        // Complete
-        if let Some(ref m) = metrics {
-            m.team_plans_generated.add(plans.len() as u64, &[]);
-            m.job_completed_counter.add(1, &[]);
-            m.job_duration
-                .record(job_start.elapsed().as_secs_f64(), &[]);
-        }
-
-        job.status = JobStatus::Completed;
-        job.updated_at = Utc::now();
-        job.progress = Some(JobProgress {
-            phase: "Complete".to_string(),
-            completed_steps: total_steps,
-            total_steps,
-        });
-        job.result = Some(JobResult {
-            message: format!(
-                "Generated {} team plan(s) from {} candidates",
-                plans.len(),
-                filtered.len()
-            ),
-            data: serde_json::to_value(&plans).ok(),
-        });
-        let _ = storage.update_job(&job).await;
-        info!(job_id = %job_id, plans = plans.len(), candidates = filtered.len(), "team plan job completed");
+        Ok((plans, candidate_count))
     }
 
     /// Synchronous team type coverage analysis.
@@ -743,28 +774,6 @@ impl<S: Storage, P: PokeApiClient> PokePlannerService<S, P> {
         }
 
         Ok(())
-    }
-
-    async fn fail_job(
-        storage: &Arc<S>,
-        job: &mut Job,
-        metrics: &Option<Metrics>,
-        job_start: std::time::Instant,
-        message: &str,
-    ) {
-        if let Some(m) = metrics {
-            m.job_failed_counter.add(1, &[]);
-            m.job_duration
-                .record(job_start.elapsed().as_secs_f64(), &[]);
-        }
-        job.status = JobStatus::Failed;
-        job.updated_at = Utc::now();
-        job.result = Some(JobResult {
-            message: message.to_string(),
-            data: None,
-        });
-        let _ = storage.update_job(job).await;
-        warn!(job_id = %job.id, "job failed: {message}");
     }
 }
 
